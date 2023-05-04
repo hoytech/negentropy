@@ -16,12 +16,13 @@ This repo contains the protocol specification, reference implementations, and te
   * [Range](#range)
   * [Message](#message)
 * [Analysis](#analysis)
-* [APIs](#apis)
+* [Reference Implementation APIs](#reference-implementation-apis)
   * [C++](#c)
   * [Javascript](#javascript)
 * [Implementation Enhancements](#implementation-enhancements)
   * [Deferred Range Processing](#deferred-range-processing)
   * [Pre-computing](#pre-computing)
+* [Use-Cases](#use-cases)
 * [Copyright](#copyright)
 <!-- END OF TOC -->
 
@@ -188,7 +189,7 @@ The amount of bandwidth consumed will grow linearly with the number of differenc
 
 
 
-## APIs
+## Reference Implementation APIs
 
 ### C++
 
@@ -282,6 +283,12 @@ A client could target fixed size messages, or could dynamically tune the message
 Instead of aggregating the data items for each query, servers and/or clients may choose to pre-compute fingerprints for their entire set of data items, or particular subsets. Most likely, fingerprints will be aggregated in a tree data-structure so it is efficient to add or remove items.
 
 How or if this is implemented is independent of the protocol as described in this document.
+
+
+
+## Use-Cases
+
+* [Bandwidth-efficient Nostr event syncing](https://github.com/hoytech/strfry/blob/next/docs/negentropy.md)
 
 
 
