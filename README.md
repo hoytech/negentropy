@@ -1,4 +1,4 @@
-# negentropy
+![negentropy logo](docs/logo.svg)
 
 This repo contains the protocol specification, reference implementations, and tests for the negentropy set-reconcilliation protocol.
 
