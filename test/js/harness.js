@@ -4,9 +4,9 @@ const Negentropy = require('../../js/Negentropy.js');
 const idSize = 16;
 
 const rl = readline.createInterface({
-  input: process.stdin,
-  output: process.stdout,
-  terminal: false
+    input: process.stdin,
+    output: process.stdout,
+    terminal: false
 });
 
 let n = 0;
@@ -19,8 +19,8 @@ rl.on('line', (line) => {
 
     let mode = parseInt(items[0]);
     let created = parseInt(items[1]);
-    let id = items[2];
-    if (id.length !== idSize*2) throw Error("unexpected id size");
+    let id = Buffer.from(items[2].trim(), 'hex');
+    if (id.byteLength !== idSize) throw Error(`id should be ${idSize} bytes`);
 
     if (mode === 1) {
         x1.addItem(created, id);
@@ -50,18 +50,18 @@ rl.once('close', () => {
             let [newQ, haveIds, needIds] = x1.reconcile(q);
             q = newQ;
 
-            for (let id of haveIds) console.log(`xor,HAVE,${id}`);
-            for (let id of needIds) console.log(`xor,NEED,${id}`);
+            for (let id of haveIds) console.log(`xor,HAVE,${Buffer.from(id).toString('hex')}`);
+            for (let id of needIds) console.log(`xor,NEED,${Buffer.from(id).toString('hex')}`);
         }
 
         if (q.length === 0) break;
 
-        console.error(`[${round}] CLIENT -> SERVER: ${q.length / 2} bytes`);
+        console.error(`[${round}] CLIENT -> SERVER: ${q.byteLength} bytes`);
 
         let [newQ, haveIds, needIds] = x2.reconcile(q);
         q = newQ;
 
-        console.error(`[${round}] SERVER -> CLIENT: ${q.length / 2} bytes`);
+        console.error(`[${round}] SERVER -> CLIENT: ${q.byteLength} bytes`);
 
         round++;
     }
