@@ -64,7 +64,9 @@ int main() {
         // CLIENT -> SERVER
 
         if (round == 0) {
-            q = x1.initiate();
+            uint64_t frameSizeLimit = 0;
+            if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
+            q = x1.initiate(frameSizeLimit);
         } else {
             std::vector<std::string> have, need;
             q = x1.reconcile(q, have, need);

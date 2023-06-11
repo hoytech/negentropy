@@ -22,7 +22,9 @@ srand($ENV{SEED} || 0);
 my $stgen = Session::Token->new(seed => "\x00" x 1024, alphabet => '0123456789abcdef', length => $idSize * 2);
 
 
-while(1) {
+my $iters = $ENV{ITERS} || 100;
+
+for (my $i = 0; $i < $iters; $i++) {
     my $ids1 = {};
     my $ids2 = {};
 
