@@ -272,15 +272,15 @@ The server-side is similar, except it doesn't create an initial message, and the
 
 ### Deferred Range Processing
 
-If there are too many differences and/or they are too randomly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because of the memory required for buffering, and also because large batch sizes prevents work pipelining, where the synchronised records are processed while additional syncing is occurring.
+If there are too many differences and/or they are too randomly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because of the memory required for buffering, and also because large batch sizes prevent work pipelining, where the synchronized records are processed while additional syncing is occurring.
 
 Because of this, a client implementation may choose to defer the processing of ranges. Rather than transmit all the ranges it has found that need syncing, it can transmit a smaller number and keep the remaining for subsequent message rounds. This will decrease the message size at the expense of increasing the number of messaging round-trips.
 
-A client could target fixed size messages, or could dynamically tune the message sizes based on its throughput metrics.
+A client could target fixed-size messages, or could dynamically tune the message sizes based on its throughput metrics.
 
 ### Pre-computing
 
-Instead of aggregating the data items for each query, servers and/or clients may choose to pre-compute fingerprints for their entire set of data items, or particular subsets. Most likely, fingerprints will be aggregated in a tree data-structure so it is efficient to add or remove items.
+Instead of aggregating the data items for each query, servers and/or clients may choose to pre-compute fingerprints for their entire set of data items, or particular subsets. Most likely, fingerprints will be aggregated in a tree data structure so it is efficient to add or remove items.
 
 How or if this is implemented is independent of the protocol as described in this document.
 
