@@ -136,7 +136,7 @@ struct Negentropy {
 
         while (query.size()) {
             auto currBound = decodeBound(query, lastTimestampIn);
-            auto mode = decodeVarInt(query); // 0 = Skip, 1 = Fingerprint, 2 = IdList, 3 = IdListResponse
+            auto mode = decodeVarInt(query); // 0 = Skip, 1 = Fingerprint, 2 = IdList
 
             auto lower = prevIndex;
             auto upper = std::upper_bound(prevIndex, items.end(), currBound);
@@ -166,16 +166,12 @@ struct Negentropy {
                     theirElems.emplace(e, TheirElem{i, false});
                 }
 
-                std::vector<std::string> responseHaveIds;
-                std::vector<uint64_t> responseNeedIndices;
-
                 for (auto it = lower; it < upper; ++it) {
                     auto e = theirElems.find(std::string(it->getId()));
 
                     if (e == theirElems.end()) {
                         // ID exists on our side, but not their side
                         if (isInitiator) haveIds.emplace_back(it->getId());
-                        else responseHaveIds.emplace_back(it->getId());
                     } else {
                         // ID exists on both sides
                         e->second.onBothSides = true;
@@ -186,35 +182,22 @@ struct Negentropy {
                     if (!v.onBothSides) {
                         // ID exists on their side, but not our side
                         if (isInitiator) needIds.emplace_back(k);
-                        else responseNeedIndices.emplace_back(v.offset);
                     }
                 }
 
                 if (!isInitiator) {
-                    std::string payload = encodeVarInt(3); // mode = IdListResponse
+                    std::vector<std::string> responseHaveIds;
+
+                    for (auto it = lower; it < upper; ++it) {
+                        responseHaveIds.emplace_back(it->getId());
+                    }
+
+                    std::string payload = encodeVarInt(2); // mode = IdList
 
                     payload += encodeVarInt(responseHaveIds.size());
                     for (const auto &id : responseHaveIds) payload += id;
 
-                    auto bitField = encodeBitField(responseNeedIndices);
-                    payload += encodeVarInt(bitField.size());
-                    payload += bitField;
-
                     outputs.emplace_back(BoundOutput({ prevBound, currBound, std::move(payload) }));
-                }
-            } else if (mode == 3) { // IdListResponse
-                if (!isInitiator) throw negentropy::err("unexpected IdListResponse");
-
-                auto numIds = decodeVarInt(query);
-                for (uint64_t i = 0; i < numIds; i++) {
-                    needIds.emplace_back(getBytes(query, idSize));
-                }
-
-                auto bitFieldSize = decodeVarInt(query);
-                auto bitField = getBytes(query, bitFieldSize);
-
-                for (auto it = lower; it < upper; ++it) {
-                    if (bitFieldLookup(bitField, it - lower)) haveIds.emplace_back(it->getId());
                 }
             } else {
                 throw negentropy::err("unexpected mode");
@@ -297,6 +280,7 @@ struct Negentropy {
 
         return output;
     }
+
 
     // Decoding
 
@@ -395,21 +379,6 @@ struct Negentropy {
 
             return XorElem(curr.timestamp, currKey.substr(0, sharedPrefixBytes + 1));
         }
-    }
-
-    std::string encodeBitField(const std::vector<uint64_t> inds) {
-        if (inds.size() == 0) return "";
-        uint64_t max = *std::max_element(inds.begin(), inds.end());
-
-        std::string bitField = std::string((max + 8) / 8, '\0');
-        for (auto ind : inds) bitField[ind / 8] |= 1 << ind % 8;
-
-        return bitField;
-    }
-
-    bool bitFieldLookup(const std::string &bitField, uint64_t ind) {
-        if ((ind + 8) / 8 > bitField.size()) return false;
-        return !!(bitField[ind / 8] & 1 << (ind % 8));
     }
 };
 
