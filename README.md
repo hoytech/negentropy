@@ -10,6 +10,7 @@ This repo contains the protocol specification, reference implementations, and te
   * [Setup](#setup)
   * [Alternating Messages](#alternating-messages)
   * [Algorithm](#algorithm)
+  * [Frame Size Limits](#frame-size-limits)
 * [Definitions](#definitions)
   * [Varint](#varint)
   * [Bound](#bound)
@@ -20,7 +21,6 @@ This repo contains the protocol specification, reference implementations, and te
   * [C++](#c)
   * [Javascript](#javascript)
 * [Implementation Enhancements](#implementation-enhancements)
-  * [Deferred Range Processing](#deferred-range-processing)
   * [Pre-computing](#pre-computing)
 * [Use-Cases](#use-cases)
 * [Copyright](#copyright)
@@ -79,7 +79,7 @@ The modes supported are:
 * `Skip`: No further processing is needed for this range. Payload is empty.
 * `Fingerprint`: Payload contains the fingerprint for this range.
 * `IdList`: Payload contains a complete list of IDs for this range.
-* `IdListResponse`: Only allowed for server->client messages. Contains a list of IDs the server has and the client needs, as well as a bit-field that represents which IDs the server needs and the client has.
+* `Continuation`: Indicates that the other side has more to send in the next reconciliation round, but is not sending now because of a configured [frame size limit](#frame-size-limits)
 
 If a message does not end in a range with an "infinity" upper bound, an implicit range with upper bound of "infinity" and mode `Skip` is appended. This means that an empty message indicates that all ranges have been processed and the sender believes the protocol can now terminate.
 
@@ -87,12 +87,10 @@ If a message does not end in a range with an "infinity" upper bound, an implicit
 
 Upon receiving a message, the recipient should loop over the message's ranges in order, while concurrently constructing a new message. `Skip` ranges are answered with `Skip` ranges, and adjacent `Skip` ranges should be coalesced into a single `Skip` range.
 
-`IdList` ranges represent a complete list of IDs held by the sender. Because the receiver obviously knows the items it has, this information is enough to fully reconcile the range. Therefore, when the client receives an `IdList` range, it should reply with a `Skip` range. However, since the goal of the protocol is to ensure the *client* has this information, when a server receives an `IdList` range it should reply with an `IdListResponse` range.
-
-The `IdListResponse` range contains a list of the IDs the server has (and the client needs), but uses a packed bit-field representation to refer to the IDs the client has that the server needs. This avoids having to either a) transfer the complete set of its own IDs, or b) redundantly re-transfer IDs that were sent by the client.
+`IdList` ranges represent a complete list of IDs held by the sender. Because the receiver obviously knows the items it has, this information is enough to fully reconcile the range. Therefore, when the client receives an `IdList` range, it should reply with a `Skip` range. However, since the goal of the protocol is to ensure the *client* has this information, when a server receives an `IdList` range it should reply with its own ranges (typically `IdList` and/or skip ranges).
 
 `Fingerprint` ranges contain enough information to determine whether or not the data items within a range are equivalent on each side, however determining the actual difference in IDs requires further recursive processing.
-  * Because `IdList` and `IdListResponse` messages terminate processing for a given range, they are called *base case* messages.
+  * Since `IdList` or `Skip` messages will always cause the client to terminate processing for the given ranges, these messages are considered a *base cases*.
   * When the fingerprints on each side differ, the reciever should *split* its own range and send the results back in the next message. When splitting, the number of records within each sub-range should be considered. When small, an `IdList` range should be sent. When large, then the sub-range should itself be sent as a `Fingerprint` (this is the recursion).
   * When a range is split, the sub-ranges should completely cover the original range's lower and upper bounds.
   * How to split the range is implementation-defined. The simplest way is to divide the records that fall within the range into N equal-sized buckets, and emit a Fingerprint sub-range for each of these buckets. However, an implementation could choose different grouping criteria. For example, events with similar timestamps could be grouped into a single bucket. If the implementation believes the other side is less likely to have recent events, it could make the most recent bucket an `IdList`.
@@ -101,6 +99,12 @@ The `IdListResponse` range contains a list of the IDs the server has (and the cl
 The initial message should cover the full universe, and therefore must have at least one range. The last range's upper bound should have the infinity timestamp (and the `id` doesn't matter, so should be empty also). How many ranges used in the initial message depends on the implementation. The most obvious implementation is to use the same logic as described above, either using the base case or splitting, depending on set size. However, an implementation may choose to use fewer or more buckets in its initial message, and/or may use different grouping strategies.
 
 Once the client has looped over all ranges in a server's message and its constructed response message is a full-universe `Skip` range (ie, the empty string `""`), then it needs no more information from the server and therefore it should terminate the protocol.
+
+### Frame Size Limits
+
+If there are too many differences and/or they are too randomly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because the network transport may have message size limitations, and also because large batch sizes inhibit work pipelining, where the synchronised records are processed while additional syncing is occurring.
+
+Because of this, implementations may support a *frame size limit* parameter. Rather than transmit all the ranges it has found that need syncing, it can transmit a smaller number such that the total message size is below the configured parameter. Remaining ranges will be transmitted in subsequent message rounds. This will limit the message size at the expense of increasing the number of messaging round-trips.
 
 
 
@@ -136,7 +140,7 @@ IDs are represented as byte-strings truncated to length `idSize`:
 
 A range consists of an upper bound, a mode, and a payload (determined by mode):
 
-    Range := <upperBound (Bound)> <mode (Varint)> <Skip | Fingerprint | IdList | IdListResponse>
+    Range := <upperBound (Bound)> <mode (Varint)> <Skip | Fingerprint | IdList | Continuation>
 
 * If `mode = 0`, then payload is `Skip`, which is simply empty:
 
@@ -150,9 +154,11 @@ A range consists of an upper bound, a mode, and a payload (determined by mode):
 
       IdList := <length (Varint)> <ids (Id)>*
 
-* If `mode = 3`, the payload is `IdListResponse`. This is only sent by the server in response to an `IdList` range. It contains an `IdList` containing IDs only the server-side has, and a bit-field where each bit (starting from the least-significant bit of first byte) indicates if the Nth client-side ID is needed by the server:
+* If `mode = 4`, then payload is `Continuation`, which is simply empty. If present, a continuation range should always be the last range in a message, and its upperBound should be "infinity".
 
-      IdListResponse := <haveIds (IdList)> <bitFieldLength (Varint)> <bitField (Byte)>*
+      Continuation :=
+
+NOTE: A previous version of this protocol defined a `mode = 3` message, but this has now been deprecated and an error should be thrown if this (or any other unexpected mode) is encountered.
 
 ### Message
 
@@ -200,6 +206,10 @@ The library is contained in a single-header with no non-standard dependencies:
 First, create a `Negentropy` object. The `16` argument is `idSize`:
 
     Negentropy ne(16);
+
+There is an optional constructor parameter, `frameSizeLimit` which is the maximum size message that will be created, in bytes:
+
+    Negentropy ne(16, 50'000);
 
 Next, add all the items in your collection, and `seal()`:
 
@@ -269,14 +279,6 @@ The server-side is similar, except it doesn't create an initial message, and the
 
 
 ## Implementation Enhancements
-
-### Deferred Range Processing
-
-If there are too many differences and/or they are too randomly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because of the memory required for buffering, and also because large batch sizes prevents work pipelining, where the synchronised records are processed while additional syncing is occurring.
-
-Because of this, a client implementation may choose to defer the processing of ranges. Rather than transmit all the ranges it has found that need syncing, it can transmit a smaller number and keep the remaining for subsequent message rounds. This will decrease the message size at the expense of increasing the number of messaging round-trips.
-
-A client could target fixed size messages, or could dynamically tune the message sizes based on its throughput metrics.
 
 ### Pre-computing
 
