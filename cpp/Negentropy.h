@@ -8,7 +8,7 @@
 #include <string_view>
 #include <vector>
 #include <deque>
-#include <unordered_map>
+#include <unordered_set>
 #include <limits>
 #include <algorithm>
 #include <stdexcept>
@@ -69,6 +69,7 @@ inline bool operator<(const XorElem &a, const XorElem &b) {
 
 struct Negentropy {
     uint64_t idSize;
+    uint64_t frameSizeLimit;
 
     struct BoundOutput {
         XorElem start;
@@ -79,11 +80,12 @@ struct Negentropy {
     std::vector<XorElem> items;
     bool sealed = false;
     bool isInitiator = false;
-    uint64_t frameSizeLimit = 0;
+    bool continuationNeeded = false;
     std::deque<BoundOutput> pendingOutputs;
 
-    Negentropy(uint64_t idSize) : idSize(idSize) {
+    Negentropy(uint64_t idSize = 16, uint64_t frameSizeLimit = 0) : idSize(idSize), frameSizeLimit(frameSizeLimit) {
         if (idSize < 8 || idSize > 32) throw negentropy::err("idSize invalid");
+        if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
     void addItem(uint64_t createdAt, std::string_view id) {
@@ -100,12 +102,9 @@ struct Negentropy {
         sealed = true;
     }
 
-    std::string initiate(uint64_t frameSizeLimit_ = 0) {
+    std::string initiate() {
         if (!sealed) throw negentropy::err("not sealed");
         isInitiator = true;
-
-        if (frameSizeLimit_ != 0 && frameSizeLimit_ < 1024) throw negentropy::err("frameSizeLimit too small");
-        frameSizeLimit = frameSizeLimit_;
 
         splitRange(items.begin(), items.end(), XorElem(0, ""), XorElem(MAX_U64, ""), pendingOutputs);
 
@@ -128,6 +127,7 @@ struct Negentropy {
   private:
     void reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!sealed) throw negentropy::err("not sealed");
+        continuationNeeded = false;
 
         auto prevBound = XorElem(0, "");
         auto prevIndex = items.begin();
@@ -136,7 +136,7 @@ struct Negentropy {
 
         while (query.size()) {
             auto currBound = decodeBound(query, lastTimestampIn);
-            auto mode = decodeVarInt(query); // 0 = Skip, 1 = Fingerprint, 2 = IdList
+            auto mode = decodeVarInt(query); // 0 = Skip, 1 = Fingerprint, 2 = IdList, 3 = deprecated, 4 = Continuation
 
             auto lower = prevIndex;
             auto upper = std::upper_bound(prevIndex, items.end(), currBound);
@@ -155,50 +155,67 @@ struct Negentropy {
             } else if (mode == 2) { // IdList
                 auto numIds = decodeVarInt(query);
 
-                struct TheirElem {
-                    uint64_t offset;
-                    bool onBothSides;
-                };
-
-                std::unordered_map<std::string, TheirElem> theirElems;
+                std::unordered_set<std::string> theirElems;
                 for (uint64_t i = 0; i < numIds; i++) {
                     auto e = getBytes(query, idSize);
-                    theirElems.emplace(e, TheirElem{i, false});
+                    theirElems.insert(e);
                 }
 
                 for (auto it = lower; it < upper; ++it) {
-                    auto e = theirElems.find(std::string(it->getId()));
+                    auto k = std::string(it->getId());
 
-                    if (e == theirElems.end()) {
+                    if (theirElems.find(k) == theirElems.end()) {
                         // ID exists on our side, but not their side
-                        if (isInitiator) haveIds.emplace_back(it->getId());
+                        if (isInitiator) haveIds.emplace_back(k);
                     } else {
                         // ID exists on both sides
-                        e->second.onBothSides = true;
+                        theirElems.erase(k);
                     }
                 }
 
-                for (const auto &[k, v] : theirElems) {
-                    if (!v.onBothSides) {
+                if (isInitiator) {
+                    for (const auto &k : theirElems) {
                         // ID exists on their side, but not our side
-                        if (isInitiator) needIds.emplace_back(k);
+                        needIds.emplace_back(k);
                     }
-                }
-
-                if (!isInitiator) {
+                } else {
                     std::vector<std::string> responseHaveIds;
 
-                    for (auto it = lower; it < upper; ++it) {
+                    auto it = lower;
+                    bool didSplit = false;
+                    XorElem splitBound;
+
+                    auto flushIdListOutput = [&]{
+                        std::string payload = encodeVarInt(2); // mode = IdList
+
+                        payload += encodeVarInt(responseHaveIds.size());
+                        for (const auto &id : responseHaveIds) payload += id;
+
+                        auto nextSplitBound = it >= upper ? currBound : getMinimalBound(*it, *std::next(it));
+
+                        outputs.emplace_back(BoundOutput({
+                            didSplit ? splitBound : prevBound,
+                            nextSplitBound,
+                            std::move(payload)
+                        }));
+
+                        splitBound = nextSplitBound;
+                        didSplit = true;
+
+                        responseHaveIds.clear();
+                    };
+
+                    for (; it < upper; ++it) {
                         responseHaveIds.emplace_back(it->getId());
+                        if (responseHaveIds.size() >= 100) flushIdListOutput(); // 100*32 is less than minimum frame size limit of 4k
                     }
 
-                    std::string payload = encodeVarInt(2); // mode = IdList
-
-                    payload += encodeVarInt(responseHaveIds.size());
-                    for (const auto &id : responseHaveIds) payload += id;
-
-                    outputs.emplace_back(BoundOutput({ prevBound, currBound, std::move(payload) }));
+                    flushIdListOutput();
                 }
+            } else if (mode == 3) { // Deprecated
+                throw negentropy::err("other side is speaking old negentropy protocol");
+            } else if (mode == 4) { // Continuation
+                continuationNeeded = true;
             } else {
                 throw negentropy::err("unexpected mode");
             }
@@ -260,6 +277,8 @@ struct Negentropy {
             std::string o;
 
             auto &p = pendingOutputs.front();
+
+            // When bounds are out of order, finish this message and we'll resume next time
             if (p.start < currBound) break;
 
             if (currBound != p.start) {
@@ -270,12 +289,19 @@ struct Negentropy {
             o += encodeBound(p.end, lastTimestampOut);
             o += p.payload;
 
-            if (frameSizeLimit && output.size() + o.size() > frameSizeLimit) break;
+            if (frameSizeLimit && output.size() + o.size() > frameSizeLimit - 5) break; // 5 leaves room for Continuation
             output += o;
 
             pendingOutputs.pop_front();
 
             currBound = p.end;
+        }
+
+        // Server indicates that it has more to send, OR ensure client sends a non-empty message
+
+        if ((!isInitiator && pendingOutputs.size()) || (isInitiator && output.size() == 0 && continuationNeeded)) {
+            output += encodeBound(XorElem(MAX_U64, ""), lastTimestampOut);
+            output += encodeVarInt(4); // mode = Continue
         }
 
         return output;

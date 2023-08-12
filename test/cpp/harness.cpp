@@ -25,9 +25,13 @@ std::vector<std::string> split(const std::string &s, char delim) {
 int main() {
     const uint64_t idSize = 16;
 
+    uint64_t frameSizeLimit1 = 0, frameSizeLimit2 = 0;
+    if (::getenv("FRAMESIZELIMIT1")) frameSizeLimit1 = std::stoull(::getenv("FRAMESIZELIMIT1"));
+    if (::getenv("FRAMESIZELIMIT2")) frameSizeLimit2 = std::stoull(::getenv("FRAMESIZELIMIT2"));
+
     // x1 is client, x2 is server
-    Negentropy x1(idSize);
-    Negentropy x2(idSize);
+    Negentropy x1(idSize, frameSizeLimit1);
+    Negentropy x2(idSize, frameSizeLimit2);
 
     std::string line;
     while (std::cin) {
@@ -59,14 +63,14 @@ int main() {
 
     std::string q;
     uint64_t round = 0;
+    uint64_t totalUp = 0;
+    uint64_t totalDown = 0;
 
     while (1) {
         // CLIENT -> SERVER
 
         if (round == 0) {
-            uint64_t frameSizeLimit = 0;
-            if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
-            q = x1.initiate(frameSizeLimit);
+            q = x1.initiate();
         } else {
             std::vector<std::string> have, need;
             q = x1.reconcile(q, have, need);
@@ -78,16 +82,22 @@ int main() {
         if (q.size() == 0) break;
 
         std::cerr << "[" << round << "] CLIENT -> SERVER: " << q.size() << " bytes" << std::endl;
+        totalUp += q.size();
+        if (frameSizeLimit1 && q.size() > frameSizeLimit1) throw hoytech::error("frameSizeLimit1 exceeded");
 
         // SERVER -> CLIENT
 
         q = x2.reconcile(q);
 
         std::cerr << "[" << round << "] SERVER -> CLIENT: " << q.size() << " bytes" << std::endl;
+        totalDown += q.size();
+        if (frameSizeLimit2 && q.size() > frameSizeLimit2) throw hoytech::error("frameSizeLimit2 exceeded");
 
 
         round++;
     }
+
+    std::cerr << "UP: " << totalUp << " bytes, DOWN: " << totalDown << " bytes" << std::endl;
 
     return 0;
 }
