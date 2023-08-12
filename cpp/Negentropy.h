@@ -273,12 +273,14 @@ struct Negentropy {
         auto currBound = XorElem(0, "");
         uint64_t lastTimestampOut = 0;
 
+        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start < b.start; });
+
         while (pendingOutputs.size()) {
             std::string o;
 
             auto &p = pendingOutputs.front();
 
-            // When bounds are out of order, finish this message and we'll resume next time
+            // When bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
             if (p.start < currBound) break;
 
             if (currBound != p.start) {
