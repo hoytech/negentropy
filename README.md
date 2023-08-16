@@ -50,9 +50,9 @@ In order to use negentropy, you need to define some mappings from your data reco
   * Two identical records should not have different IDs (records should be canonicalised prior to hashing, if necessary)
 * `record -> timestamp`
   * Although timestamp is the most obvious, any ordering criteria can be used. The protocol will be most efficient if records with similar timestamps are often downloaded/stored/generated together
-  * Timestamps do *not* need to be unique (different records can have the same timestamp)
   * Units can be anything (seconds, microseconds, etc) as long as they fit in an 64-bit unsigned integer
   * The largest 64-bit unsigned integer should be reserved as a special "infinity" value
+  * Timestamps do *not* need to be unique (different records can have the same timestamp). If necessary, `0` can be used as the timestamp for every record
 
 Negentropy does not support the concept of updating or changing a record while preserving its ID. This should instead be modelled as deleting the old record and inserting a new one.
 
@@ -90,7 +90,7 @@ Upon receiving a message, the recipient should loop over the message's ranges in
 `IdList` ranges represent a complete list of IDs held by the sender. Because the receiver obviously knows the items it has, this information is enough to fully reconcile the range. Therefore, when the client receives an `IdList` range, it should reply with a `Skip` range. However, since the goal of the protocol is to ensure the *client* has this information, when a server receives an `IdList` range it should reply with its own ranges (typically `IdList` and/or skip ranges).
 
 `Fingerprint` ranges contain enough information to determine whether or not the data items within a range are equivalent on each side, however determining the actual difference in IDs requires further recursive processing.
-  * Since `IdList` or `Skip` messages will always cause the client to terminate processing for the given ranges, these messages are considered a *base cases*.
+  * Since `IdList` or `Skip` messages will always cause the client to terminate processing for the given ranges, these messages are considered *base cases*.
   * When the fingerprints on each side differ, the reciever should *split* its own range and send the results back in the next message. When splitting, the number of records within each sub-range should be considered. When small, an `IdList` range should be sent. When large, then the sub-range should itself be sent as a `Fingerprint` (this is the recursion).
   * When a range is split, the sub-ranges should completely cover the original range's lower and upper bounds.
   * How to split the range is implementation-defined. The simplest way is to divide the records that fall within the range into N equal-sized buckets, and emit a Fingerprint sub-range for each of these buckets. However, an implementation could choose different grouping criteria. For example, events with similar timestamps could be grouped into a single bucket. If the implementation believes the other side is less likely to have recent events, it could make the most recent bucket an `IdList`.
@@ -241,6 +241,8 @@ The server-side is similar, except it doesn't create an initial message, and the
     }
 
 ### Javascript
+
+**WARNING**: The Javascript implementation is slightly behind the C++ implementation and is likely incompatible with the latest version of this specification. This will be fixed soon.
 
 The library is contained in a single javascript file. It shouldn't need any dependencies, in either a browser or node.js:
 
