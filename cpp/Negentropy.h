@@ -97,7 +97,6 @@ struct Negentropy {
     void seal() {
         if (sealed) throw negentropy::err("already sealed");
 
-        std::reverse(items.begin(), items.end()); // typically pushed in approximately descending order so this may speed up the sort
         std::sort(items.begin(), items.end());
         sealed = true;
     }
@@ -191,7 +190,7 @@ struct Negentropy {
                         payload += encodeVarInt(responseHaveIds.size());
                         for (const auto &id : responseHaveIds) payload += id;
 
-                        auto nextSplitBound = it >= upper ? currBound : getMinimalBound(*it, *std::next(it));
+                        auto nextSplitBound = std::next(it) >= upper ? currBound : getMinimalBound(*it, *std::next(it));
 
                         outputs.emplace_back(BoundOutput({
                             didSplit ? splitBound : prevBound,
@@ -257,7 +256,7 @@ struct Negentropy {
 
                 outputs.emplace_back(BoundOutput({
                     i == 0 ? lowerBound : prevBound,
-                    getMinimalBound(*std::prev(curr), *curr),
+                    curr == items.end() ? upperBound : getMinimalBound(*std::prev(curr), *curr),
                     std::move(payload)
                 }));
 
@@ -294,9 +293,8 @@ struct Negentropy {
             if (frameSizeLimit && output.size() + o.size() > frameSizeLimit - 5) break; // 5 leaves room for Continuation
             output += o;
 
-            pendingOutputs.pop_front();
-
             currBound = p.end;
+            pendingOutputs.pop_front();
         }
 
         // Server indicates that it has more to send, OR ensure client sends a non-empty message
