@@ -29,7 +29,7 @@ This repo contains the protocol specification, reference implementations, and te
 
 ## Introduction
 
-Set reconcilliation supports the replication or syncing of data-sets, either because they were created independently, or because they have drifted out of sync because of downtime, network partitions, misconfigurations, etc. In the latter case, detecting and fixing these inconsistencies is sometimes called [anti-entropy repair](https://docs.datastax.com/en/cassandra-oss/3.x/cassandra/operations/opsRepairNodesManualRepair.html).
+Set reconcilliation supports the replication or syncing of data-sets, either because they were created independently, or because they have drifted out of sync due to downtime, network partitions, misconfigurations, etc. In the latter case, detecting and fixing these inconsistencies is sometimes called [anti-entropy repair](https://docs.datastax.com/en/cassandra-oss/3.x/cassandra/operations/opsRepairNodesManualRepair.html).
 
 Suppose two participants on a network each have a set of records that they have collected independently. Set-reconcilliation efficiently determines which records one side has that the other side doesn't, and vice versa. After the records that are missing have been determined, this information can be used to transfer the missing data items. The actual transfer is external to the negentropy protocol.
 
@@ -79,7 +79,7 @@ The modes supported are:
 * `Skip`: No further processing is needed for this range. Payload is empty.
 * `Fingerprint`: Payload contains the fingerprint for this range.
 * `IdList`: Payload contains a complete list of IDs for this range.
-* `Continuation`: Indicates that the other side has more to send in the next reconciliation round, but is not sending now because of a configured [frame size limit](#frame-size-limits)
+* `Continuation`: Indicates that the other side has more to send in the next reconciliation round, but is not sending now because of a configured [frame size limit](#frame-size-limits).
 
 If a message does not end in a range with an "infinity" upper bound, an implicit range with upper bound of "infinity" and mode `Skip` is appended. This means that an empty message indicates that all ranges have been processed and the sender believes the protocol can now terminate.
 
@@ -242,15 +242,13 @@ The server-side is similar, except it doesn't create an initial message, and the
 
 ### Javascript
 
-**WARNING**: The Javascript implementation is slightly behind the C++ implementation and is likely incompatible with the latest version of this specification. This will be fixed soon.
-
 The library is contained in a single javascript file. It shouldn't need any dependencies, in either a browser or node.js:
 
     const Negentropy = require('Negentropy.js');
 
-First, create a `Negentropy` object. The `16` argument is `idSize`:
+First, create a `Negentropy` object. The `16` argument is `idSize` and which is followed by an optional `frameSizeLimit`:
 
-    let ne = new Negentropy(16);
+    let ne = new Negentropy(16, 50000);
 
 Next, add all the items in your collection, and `seal()`:
 
@@ -259,6 +257,9 @@ Next, add all the items in your collection, and `seal()`:
     }
 
     ne.seal();
+
+*  `timestamp` should be a JS number
+*  `id` should be a hex string, `Uint8Array`, or node.js `Buffer`
 
 On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete:
 
@@ -270,6 +271,8 @@ On the client-side, create an initial message, and then transmit it to the serve
         msg = newMsg;
         // handle have/need
     }
+
+*  The output `msg`s and the IDs in `have`/`need` are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
 
 The server-side is similar, except it doesn't create an initial message, and there are no `have`/`need` arrays:
 
