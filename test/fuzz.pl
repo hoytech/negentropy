@@ -1,21 +1,25 @@
 #!/usr/bin/env perl
 
 use strict;
+$|++;
 
 use IPC::Open2;
 use Session::Token;
 
-my $harnessType = shift || die "please provide harness type (cpp, js, etc)";
+die "usage: $0 <lang1> <lang2>" if @ARGV < 2;
+my $harnessCmd1 = harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
+my $harnessCmd2 = harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
 my $idSize = shift || 16;
 
+sub harnessTypeToCmd {
+    my $harnessType = shift;
 
-my $harnessCmd;
+    if ($harnessType eq 'cpp') {
+        return './cpp/harness';
+    } elsif ($harnessType eq 'js') {
+        return 'node js/harness.js';
+    }
 
-if ($harnessType eq 'cpp') {
-    $harnessCmd = './cpp/harness';
-} elsif ($harnessType eq 'js') {
-    $harnessCmd = 'node js/harness.js';
-} else {
     die "unknown harness type: $harnessType";
 }
 
@@ -23,8 +27,6 @@ if ($harnessType eq 'cpp') {
 srand($ENV{SEED} || 0);
 my $stgen = Session::Token->new(seed => "\x00" x 1024, alphabet => '0123456789abcdef', length => $idSize * 2);
 
-
-my $iters = $ENV{ITERS} // 1;
 
 my $minRecs = $ENV{MIN_RECS} // 1;
 my $maxRecs = $ENV{MAX_RECS} // 10_000;
@@ -44,66 +46,114 @@ my $prob3 = $ENV{P3} // 98;
 }
 
 
-for (my $i = 0; $i < $iters; $i++) {
-    my $ids1 = {};
-    my $ids2 = {};
+my $ids1 = {};
+my $ids2 = {};
 
-    my $pid = open2(my $outfile, my $infile, $harnessCmd);
+my ($pid1, $pid2);
+my ($infile1, $infile2);
+my ($outfile1, $outfile2);
 
-    my $num = $minRecs + rnd($maxRecs - $minRecs);
-
-    for (1..$num) {
-        my $mode;
-
-        my $modeRnd = rand();
-
-        if ($modeRnd < $prob1) {
-            $mode = 1;
-        } elsif ($modeRnd < $prob1 + $prob2) {
-            $mode = 2;
-        } else {
-            $mode = 3;
-        }
-
-        my $created = 1677970534 + rnd($num);
-        my $id = $stgen->get;
-
-        $ids1->{$id} = 1 if $mode == 1 || $mode == 3;
-        $ids2->{$id} = 1 if $mode == 2 || $mode == 3;
-
-        print $infile "$mode,$created,$id\n";
-    }
-
-    close($infile);
-
-    while (<$outfile>) {
-        if (/^xor,(HAVE|NEED),(\w+)/) {
-            my ($action, $id) = ($1, $2);
-
-            if ($action eq 'NEED') {
-                die "duplicate insert of $action,$id" if $ids1->{$id};
-                $ids1->{$id} = 1;
-            } elsif ($action eq 'HAVE') {
-                die "duplicate insert of $action,$id" if $ids2->{$id};
-                $ids2->{$id} = 1;
-            }
-        }
-    }
-
-    waitpid($pid, 0);
-    my $child_exit_status = $?;
-    die "failure running test harness" if $child_exit_status;
-
-    for my $id (keys %$ids1) {
-        die "$id not in ids2" if !$ids2->{$id};
-    }
-
-    for my $id (keys %$ids2) {
-        die "$id not in ids1" if !$ids1->{$id};
-    }
-
-    print "\n-----------OK-----------\n";
+{
+    local $ENV{FRAMESIZELIMIT};
+    $ENV{FRAMESIZELIMIT} = $ENV{FRAMESIZELIMIT1} if defined $ENV{FRAMESIZELIMIT1};
+    $pid1 = open2($outfile1, $infile1, $harnessCmd1);
 }
+
+{
+    local $ENV{FRAMESIZELIMIT};
+    $ENV{FRAMESIZELIMIT} = $ENV{FRAMESIZELIMIT2} if defined $ENV{FRAMESIZELIMIT2};
+    $pid2 = open2($outfile2, $infile2, $harnessCmd2);
+}
+
+my $num = $minRecs + rnd($maxRecs - $minRecs);
+
+for (1..$num) {
+    my $created = 1677970534 + rnd($num);
+    my $id = $stgen->get;
+
+    my $modeRnd = rand();
+
+    if ($modeRnd < $prob1) {
+        print $infile1 "item,$created,$id\n";
+        $ids1->{$id} = 1;
+    } elsif ($modeRnd < $prob1 + $prob2) {
+        print $infile2 "item,$created,$id\n";
+        $ids2->{$id} = 1;
+    } else {
+        print $infile1 "item,$created,$id\n";
+        print $infile2 "item,$created,$id\n";
+        $ids1->{$id} = 1;
+        $ids2->{$id} = 1;
+    }
+}
+
+print $infile1 "seal\n";
+print $infile2 "seal\n";
+
+print $infile1 "initiate\n";
+
+
+my $round = 0;
+my $totalUp = 0;
+my $totalDown = 0;
+
+while (1) {
+    my $msg = <$outfile1>;
+
+    if ($msg =~ /^(have|need),(\w+)/) {
+        my ($action, $id) = ($1, $2);
+
+        if ($action eq 'need') {
+            die "duplicate insert of $action,$id" if $ids1->{$id};
+            $ids1->{$id} = 1;
+        } elsif ($action eq 'have') {
+            die "duplicate insert of $action,$id" if $ids2->{$id};
+            $ids2->{$id} = 1;
+        }
+
+        next;
+    } elsif ($msg =~ /^msg,(\w+)/) {
+        my $data = $1;
+        print $infile2 "msg,$data\n";
+
+        my $bytes = length($data) / 2;
+        $totalUp += $bytes;
+        print "[$round] CLIENT -> SERVER: $bytes bytes\n";
+    } elsif ($msg =~ /^done/) {
+        last;
+    } else {
+        die "unexpected line from 1: '$msg'";
+    }
+
+    $msg = <$outfile2>;
+
+    if ($msg =~ /^msg,(\w*)/) {
+        my $data = $1;
+        print $infile1 "msg,$data\n";
+
+        my $bytes = length($data) / 2;
+        $totalDown += $bytes;
+        print "[$round] SERVER -> CLIENT: $bytes bytes\n";
+    } else {
+        die "unexpected line from 2: $msg";
+    }
+
+    $round++;
+}
+
+kill 'KILL', $pid1, $pid2;
+
+for my $id (keys %$ids1) {
+    die "$id not in ids2" if !$ids2->{$id};
+}
+
+for my $id (keys %$ids2) {
+    die "$id not in ids1" if !$ids1->{$id};
+}
+
+print "UP: $totalUp bytes, DOWN: $totalDown bytes\n";
+
+print "\n-----------OK-----------\n";
 
 
 sub rnd {
