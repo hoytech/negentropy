@@ -18,6 +18,8 @@ sub harnessTypeToCmd {
         return './cpp/harness';
     } elsif ($harnessType eq 'js') {
         return 'node js/harness.js';
+    } elsif ($harnessType eq 'rust') {
+        return '../../rust-negentropy/target/debug/examples/harness';
     }
 
     die "unknown harness type: $harnessType";
@@ -99,6 +101,7 @@ my $totalDown = 0;
 
 while (1) {
     my $msg = <$outfile1>;
+    print "[1]: $msg\n" if $ENV{DEBUG};
 
     if ($msg =~ /^(have|need),(\w+)/) {
         my ($action, $id) = ($1, $2);
@@ -126,6 +129,7 @@ while (1) {
     }
 
     $msg = <$outfile2>;
+    print "[2]: $msg\n" if $ENV{DEBUG};
 
     if ($msg =~ /^msg,(\w*)/) {
         my $data = $1;
