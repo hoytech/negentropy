@@ -1,6 +1,5 @@
 // (C) 2023 Doug Hoyte. MIT license
 
-
 class WrappedBuffer {
     constructor(buffer) {
         this._raw = new Uint8Array(buffer || 256);
@@ -53,25 +52,50 @@ class Negentropy {
         this.idSize = idSize;
         this.frameSizeLimit = frameSizeLimit;
 
-        this.items = [];
+        this.addedItems = [];
         this.pendingOutputs = [];
+
+        if (typeof window === 'undefined') { // node.js
+            const crypto = require('crypto');
+            this.sha256 = async (slice) => new Uint8Array(crypto.createHash('sha256').update(slice).digest());
+        } else { // browser
+            this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
+        }
     }
 
     addItem(timestamp, id) {
         if (this.sealed) throw Error("already sealed");
-        id = this._loadInput(id);
+        id = this._loadInputBuffer(id);
 
         if (id.byteLength > 64 || id.byteLength < this.idSize) throw Error("bad length for id");
         if (id.byteLength > this.idSize) id = id.subarray(0, this.idSize);
 
-        this.items.push({ timestamp, id });
+        this.addedItems.push([ timestamp, id ]);
     }
 
     seal() {
         if (this.sealed) throw Error("already sealed");
-
-        this.items.sort(itemCompare);
         this.sealed = true;
+
+        this.addedItems.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : compareUint8Array(a[1], b[1]));
+
+        if (this.addedItems.length > 1) {
+            for (let i = 0; i < this.addedItems.length - 1; i++) {
+                if (this.addedItems[i][0] == this.addedItems[i + 1][0] &&
+                    compareUint8Array(this.addedItems[i][1], this.addedItems[i + 1][1]) === 0) throw Error("duplicate item inserted");
+            }
+        }
+
+        this.itemTimestamps = new BigUint64Array(this.addedItems.length);
+        this.itemIds = new Uint8Array(this.addedItems.length * this.idSize);
+
+        for (let i = 0; i < this.addedItems.length; i++) {
+            let item = this.addedItems[i];
+            this.itemTimestamps[i] = BigInt(item[0]);
+            this.itemIds.set(item[1], i * this.idSize);
+        }
+
+        delete this.addedItems;
     }
 
     _newState() {
@@ -89,23 +113,47 @@ class Negentropy {
         return { timestamp: Number.MAX_VALUE, id: new Uint8Array(0) };
     }
 
-    _loadInput(inp) {
+    _loadInputBuffer(inp) {
         if (typeof(inp) === 'string') inp = hexToUint8Array(inp);
         else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp); // node Buffer?
         return inp;
     }
 
-    initiate() {
+    numItems() {
+        return this.itemTimestamps.length;
+    }
+
+    getItemTimestamp(i) {
+        return Number(this.itemTimestamps[i]);
+    }
+
+    getItemId(i) {
+        let offset = i * this.idSize;
+        return this.itemIds.subarray(offset, offset + this.idSize);
+    }
+
+    getItem(i) {
+        return { timestamp: this.getItemTimestamp(i), id: this.getItemId(i), };
+    }
+
+    async computeFingerprint(lower, num) {
+        let offset = lower * this.idSize;
+        let slice = this.itemIds.subarray(offset, offset + (num * this.idSize));
+        let output = await this.sha256(slice);
+        return output.subarray(0, this.idSize);
+    }
+
+    async initiate() {
         if (!this.sealed) throw Error("not sealed");
         this.isInitiator = true;
 
-        this.splitRange(0, this.items.length, this._zeroBound(), this._maxBound(), this.pendingOutputs);
+        await this.splitRange(0, this.numItems(), this._zeroBound(), this._maxBound(), this.pendingOutputs);
 
         return this.buildOutput();
     }
 
-    reconcile(query) {
-        query = new WrappedBuffer(this._loadInput(query));
+    async reconcile(query) {
+        query = new WrappedBuffer(this._loadInputBuffer(query));
         let haveIds = [], needIds = [];
 
         if (!this.sealed) throw Error("not sealed");
@@ -121,29 +169,16 @@ class Negentropy {
             let mode = this.decodeVarInt(query); // 0 = Skip, 1 = Fingerprint, 2 = IdList, 3 = deprecated, 4 = Continuation
 
             let lower = prevIndex;
-            let upper = findUpperBound(this.items, lower, this.items.length, currBound, itemCompare);
+            let upper = this.findUpperBound(lower, this.numItems(), currBound);
 
             if (mode === 0) { // Skip
                 // Do nothing
             } else if (mode === 1) { // Fingerprint
-                let theirXorSet = this.getBytes(query, this.idSize);
+                let theirFingerprint = this.getBytes(query, this.idSize);
+                let ourFingerprint = await this.computeFingerprint(lower, upper - lower);
 
-                let ourXorSet = new Uint8Array(this.idSize);
-                for (let i = lower; i < upper; ++i) {
-                    let item = this.items[i];
-                    for (let j = 0; j < this.idSize; j++) ourXorSet[j] ^= item.id[j];
-                }
-
-                let matches = true;
-                for (let i = 0; i < this.idSize; i++) {
-                    if (theirXorSet[i] !== ourXorSet[i]) {
-                        matches = false;
-                        break;
-                    }
-                }
-
-                if (!matches) {
-                    this.splitRange(lower, upper, prevBound, currBound, outputs);
+                if (compareUint8Array(theirFingerprint, ourFingerprint) !== 0) {
+                    await this.splitRange(lower, upper, prevBound, currBound, outputs);
                 }
             } else if (mode === 2) { // IdList
                 let numIds = this.decodeVarInt(query);
@@ -155,7 +190,7 @@ class Negentropy {
                 }
 
                 for (let i = lower; i < upper; i++) {
-                    let k = this.items[i].id;
+                    let k = this.getItemId(i);
 
                     if (!theirElems[k]) {
                         // ID exists on our side, but not their side
@@ -183,7 +218,7 @@ class Negentropy {
                         payload.extend(this.encodeVarInt(responseHaveIds.length));
                         for (let id of responseHaveIds) payload.extend(id);
 
-                        let nextSplitBound = (it+1) >= upper ? currBound : this.getMinimalBound(this.items[it], this.items[it+1]);
+                        let nextSplitBound = (it+1) >= upper ? currBound : this.getMinimalBound(this.getItem(it), this.getItem(it+1));
 
                         outputs.push({
                             start: didSplit ? splitBound : prevBound,
@@ -198,7 +233,7 @@ class Negentropy {
                     };
 
                     for (; it < upper; ++it) {
-                        responseHaveIds.push(this.items[it].id);
+                        responseHaveIds.push(this.getItemId(it));
                         if (responseHaveIds.length >= 100) flushIdListOutput(); // 100*32 is less than minimum frame size limit of 4k
                     }
 
@@ -223,34 +258,37 @@ class Negentropy {
         return [this.buildOutput(), haveIds, needIds];
     }
 
-    splitRange(lower, upper, lowerBound, upperBound, outputs) {
+    async splitRange(lower, upper, lowerBound, upperBound, outputs) {
         let numElems = upper - lower;
         let buckets = 16;
 
         if (numElems < buckets * 2) {
             let payload = this.encodeVarInt(2); // mode = IdList
             payload.extend(this.encodeVarInt(numElems));
-            for (let it = lower; it < upper; ++it) payload.extend(this.items[it].id);
+            for (let it = lower; it < upper; ++it) payload.extend(this.getItemId(it));
 
-            outputs.push({ start: lowerBound, end: upperBound, payload: payload, });
+            outputs.push({
+                start: lowerBound,
+                end: upperBound,
+                payload: payload,
+            });
         } else {
             let itemsPerBucket = Math.floor(numElems / buckets);
             let bucketsWithExtra = numElems % buckets;
             let curr = lower;
-            let prevBound = this.items[curr];
+            let prevBound = this.getItem(curr);
 
             for (let i = 0; i < buckets; i++) {
-                let ourXorSet = new Uint8Array(this.idSize)
-                for (let bucketEnd = curr + itemsPerBucket + (i < bucketsWithExtra ? 1 : 0); curr != bucketEnd; curr++) {
-                    for (let j = 0; j < this.idSize; j++) ourXorSet[j] ^= this.items[curr].id[j];
-                }
+                let bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
+                let ourFingerprint = await this.computeFingerprint(curr, bucketSize);
+                curr += bucketSize;
 
                 let payload = this.encodeVarInt(1); // mode = Fingerprint
-                payload.extend(ourXorSet);
+                payload.extend(ourFingerprint);
 
                 outputs.push({
                     start: i === 0 ? lowerBound : prevBound,
-                    end: curr === this.items.length ? upperBound : this.getMinimalBound(this.items[curr - 1], this.items[curr]),
+                    end: curr === upper ? upperBound : this.getMinimalBound(this.getItem(curr - 1), this.getItem(curr)),
                     payload: payload,
                 });
 
@@ -274,7 +312,7 @@ class Negentropy {
             let p = this.pendingOutputs[0];
 
             let cmp = itemCompare(p.start, currBound);
-            // When bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
+            // If bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
             if (cmp < 0) break;
 
             if (cmp !== 0) {
@@ -303,6 +341,25 @@ class Negentropy {
         let ret = output.unwrap();
         if (!this.wantUint8ArrayOutput) ret = uint8ArrayToHex(ret);
         return ret;
+    }
+
+    findUpperBound(first, last, value) {
+        let count = last - first;
+
+        while (count > 0) {
+            let it = first;
+            let step = Math.floor(count / 2);
+            it += step;
+
+            if (!(value.timestamp === this.getItemTimestamp(it) ? compareUint8Array(value.id, this.getItemId(it)) < 0 : value.timestamp < this.getItemTimestamp(it))) {
+                first = ++it;
+                count -= step + 1;
+            } else {
+                count = step;
+            }
+        }
+
+        return first;
     }
 
     // Decoding
@@ -446,34 +503,6 @@ function itemCompare(a, b) {
     }
 
     return a.timestamp - b.timestamp;
-}
-
-
-function binarySearch(arr, first, last, cmp) {
-    let count = last - first;
-
-    while (count > 0) {
-        let it = first;
-        let step = Math.floor(count / 2);
-        it += step;
-
-        if (cmp(arr[it])) {
-            first = ++it;
-            count -= step + 1;
-        } else {
-            count = step;
-        }
-    }
-
-    return first;
-}
-
-function findLowerBound(arr, first, last, value, cmp) {
-    return binarySearch(arr, first, last, (a) => cmp(a, value) < 0);
-}
-
-function findUpperBound(arr, first, last, value, cmp) {
-    return binarySearch(arr, first, last, (a) => cmp(value, a) >= 0);
 }
 
 

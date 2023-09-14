@@ -14,7 +14,7 @@ const rl = readline.createInterface({
 
 let ne = new Negentropy(idSize, frameSizeLimit);
 
-rl.on('line', (line) => {
+rl.on('line', async (line) => {
     let items = line.split(',');
 
     if (items[0] == "item") {
@@ -25,12 +25,12 @@ rl.on('line', (line) => {
     } else if (items[0] == "seal") {
         ne.seal();
     } else if (items[0] == "initiate") {
-        let q = ne.initiate();
+        let q = await ne.initiate();
         if (frameSizeLimit && q.length/2 > frameSizeLimit) throw Error("frameSizeLimit exceeded");
         console.log(`msg,${q}`);
     } else if (items[0] == "msg") {
         let q = items[1];
-        let [newQ, haveIds, needIds] = ne.reconcile(q);
+        let [newQ, haveIds, needIds] = await ne.reconcile(q);
         q = newQ;
         if (frameSizeLimit && q.length/2 > frameSizeLimit) throw Error("frameSizeLimit exceeded");
 
