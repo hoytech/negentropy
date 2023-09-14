@@ -1,3 +1,6 @@
-naming of methods: sealing, initial etc
-make mode come first
-speed up JS version (maybe use ArrayBuffer or something?)
+test JS in browser
+
+? coalesce Idlist ranges in buildOutput
+  - at least empty ones! for example when P1=1 P2=0 P3=0
+
+? is 16 * 2 optimal in splitRange
