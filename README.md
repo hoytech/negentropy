@@ -20,8 +20,9 @@ This repo contains the protocol specification, reference implementations, and te
 * [Reference Implementation APIs](#reference-implementation-apis)
   * [C++](#c)
   * [Javascript](#javascript)
-* [Implementation Enhancements](#implementation-enhancements)
-  * [Pre-computing](#pre-computing)
+  * [Rust](#rust)
+* [Adversarial Input](#adversarial-input)
+* [Pre-computing Fingerprints](#pre-computing-fingerprints)
 * [Use-Cases](#use-cases)
 * [Copyright](#copyright)
 <!-- END OF TOC -->
@@ -33,7 +34,7 @@ Set reconcilliation supports the replication or syncing of data-sets, either bec
 
 Suppose two participants on a network each have a set of records that they have collected independently. Set-reconcilliation efficiently determines which records one side has that the other side doesn't, and vice versa. After the records that are missing have been determined, this information can be used to transfer the missing data items. The actual transfer is external to the negentropy protocol.
 
-Although there are many ways to do set reconcilliation, negentropy is based on [Aljoscha Meyer's method](https://github.com/AljoschaMeyer/set-reconciliation), which has the advantage of being simple to explain and implement.
+Negentropy is based on Aljoscha Meyer's work on "Range-Based Set Reconciliation" ([overview](https://github.com/AljoschaMeyer/set-reconciliation) / [paper](https://arxiv.org/abs/2212.13567) / [master's thesis](https://github.com/AljoschaMeyer/master_thesis/blob/main/main.pdf)).
 
 
 
@@ -60,26 +61,27 @@ Negentropy does not support the concept of updating or changing a record while p
 
 The two parties engaged in the protocol are called the client and the server. The client is also called the *initiator*, because it creates and sends the first message in the protocol.
 
-Each party should begin by sorting their records in ascending order by timestamp. If the timestamps are equivalent, records should be sorted lexically by their IDs. This sorted array and contiguous slices of it are called *ranges*. The *fingerprint* of a range is equal to the bitwise eXclusive OR (XOR) of the IDs of all contained records.
+Each party should begin by sorting their records in ascending order by timestamp. If the timestamps are equivalent, records should be sorted lexically by their IDs. This sorted array and contiguous slices of it are called *ranges*. The *fingerprint* of a range is equal to the SHA-256 hash of the IDs of all records within this range (sorted as described above).
 
 Because each side potentially has a different set of records, ranges cannot be referred to by their indices in one side's sorted array. Instead, they are specified by lower and upper *bounds*. A bound is a timestamp and a variable-length ID prefix. In order to reduce the sizes of reconcilliation messages, ID prefixes are as short as possible while still being able to separate records from their predecessors in the sorted array. If two adjacent records have different timestamps, then the prefix for a bound between them is empty.
 
 Lower bounds are *inclusive* and upper bounds are *exclusive*, as is [typical in computer science](https://www.cs.utexas.edu/users/EWD/transcriptions/EWD08xx/EWD831.html). This means that given two adjacent ranges, the upper bound of the first is equal to the lower bound of the second. In order for a range to have full coverage over the universe of possible timestamps/IDs, the lower bound would have a 0 timestamp and all-0s ID, and the upper-bound would be the specially reserved "infinity" timestamp (max u64), and the ID doesn't matter.
 
-When negotiating a reconcilliation, the client and server should decide on a special `idSize` value. This must be `<= 32`. Using values less than the full 32 bytes will save bandwidth, at the expense of making collisions more likely.
+When negotiating a reconcilliation, the client and server should decide on a special `idSize` value. It must satisfy `8 <= idSize <= 32`. Using values less than the full 32 bytes will save bandwidth, at the expense of making collisions more likely.
 
 ### Alternating Messages
 
 After both sides have setup their sorted arrays, the client creates an initial message and sends it to the server. The server will then reply with another message, and the two parties continue exchanging messages until the protocol terminates (see below). After the protocol terminates, the client will have determined what IDs it has (and the server needs) and which it needs (and the server has).
 
-Each message consists of an ordered sequence of ranges. Each range contains an upper bound, a mode, and a payload. The range's lower bound is the same as the previous range's upper bound (or 0, if none). The mode indicates what type of processing is needed for this range, and therefore how the payload should be parsed.
+The initial message consists of a protocol version byte followed by an ordered sequence of ranges. Subsequent messages are the same, except without the protocol version byte. Each range contains an upper bound, a mode, and a payload. The range's lower bound is the same as the previous range's upper bound (or 0, if it is the first range). The mode indicates what type of processing is needed for this range, and therefore how the payload should be parsed.
 
 The modes supported are:
 
 * `Skip`: No further processing is needed for this range. Payload is empty.
 * `Fingerprint`: Payload contains the fingerprint for this range.
 * `IdList`: Payload contains a complete list of IDs for this range.
-* `Continuation`: Indicates that the other side has more to send in the next reconciliation round, but is not sending now because of a configured [frame size limit](#frame-size-limits).
+* `Continuation`: Indicates that the sender has more to send in the next reconciliation round, but is not sending now because of a configured [frame size limit](#frame-size-limits).
+* `UnsupportedProtocolVersion`: The server is unable to handle the protocol version suggested by the client.
 
 If a message does not end in a range with an "infinity" upper bound, an implicit range with upper bound of "infinity" and mode `Skip` is appended. This means that an empty message indicates that all ranges have been processed and the sender believes the protocol can now terminate.
 
@@ -91,9 +93,10 @@ Upon receiving a message, the recipient should loop over the message's ranges in
 
 `Fingerprint` ranges contain enough information to determine whether or not the data items within a range are equivalent on each side, however determining the actual difference in IDs requires further recursive processing.
   * Since `IdList` or `Skip` messages will always cause the client to terminate processing for the given ranges, these messages are considered *base cases*.
-  * When the fingerprints on each side differ, the reciever should *split* its own range and send the results back in the next message. When splitting, the number of records within each sub-range should be considered. When small, an `IdList` range should be sent. When large, then the sub-range should itself be sent as a `Fingerprint` (this is the recursion).
+  * When the fingerprints on each side differ, the reciever should *split* its own range and send the results back in the next message. When splitting, the number of records within each sub-range should be considered. When small, an `IdList` range should be sent. When large, the sub-ranges should themselves be sent as `Fingerprint`s (this is the recursion).
   * When a range is split, the sub-ranges should completely cover the original range's lower and upper bounds.
-  * How to split the range is implementation-defined. The simplest way is to divide the records that fall within the range into N equal-sized buckets, and emit a Fingerprint sub-range for each of these buckets. However, an implementation could choose different grouping criteria. For example, events with similar timestamps could be grouped into a single bucket. If the implementation believes the other side is less likely to have recent events, it could make the most recent bucket an `IdList`.
+  * Unlike in Meyer's designs, an "empty" fingerprint is never sent to indicate the absence of items within a range. Instead, an `IdList` of length 0 is sent because it is smaller.
+  * How to split the range is implementation-defined. The simplest way is to divide the records that fall within the range into N equal-sized buckets, and emit a `Fingerprint` sub-range for each of these buckets. However, an implementation could choose different grouping criteria. For example, events with similar timestamps could be grouped into a single bucket. If the implementation believes recent events are less likely to be reconciled, it could make the most recent bucket an `IdList` instead of `Fingerprint`.
   * Note that if alternate grouping strategies are used, an implementation should never reply to a range with a single `Fingerprint` range, otherwise the protocol may never terminate (if the other side does the same).
 
 The initial message should cover the full universe, and therefore must have at least one range. The last range's upper bound should have the infinity timestamp (and the `id` doesn't matter, so should be empty also). How many ranges used in the initial message depends on the implementation. The most obvious implementation is to use the same logic as described above, either using the base case or splitting, depending on set size. However, an implementation may choose to use fewer or more buckets in its initial message, and/or may use different grouping strategies.
@@ -102,17 +105,18 @@ Once the client has looped over all ranges in a server's message and its constru
 
 ### Frame Size Limits
 
-If there are too many differences and/or they are too randomly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because the network transport may have message size limitations, and also because large batch sizes inhibit work pipelining, where the synchronised records are processed while additional syncing is occurring.
+If there are too many differences and/or they are too evenly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because the network transport may have message size limitations, and also because large batch sizes inhibit work pipelining, where the synchronised records are processed as additional syncing occurs.
 
-Because of this, implementations may support a *frame size limit* parameter. Rather than transmit all the ranges it has found that need syncing, it can transmit a smaller number such that the total message size is below the configured parameter. Remaining ranges will be transmitted in subsequent message rounds. This will limit the message size at the expense of increasing the number of messaging round-trips.
+Because of this, implementations may support a *frame size limit* parameter. If configured, all messages created by this instance will be of length equal to or smaller than this number of bytes. After processing each message, any discovered differences will be included in the `have`/`need` arrays on the client.
 
+To implement this, instead of sending all the ranges it has found that need syncing, the instance will send a smaller number of them to stay under the size limit. Remaining ranges will be transmitted in subsequent message rounds. This means that a frame size limit can increase the number of messaging round-trips.
 
 
 ## Definitions
 
 ### Varint
 
-Varints (variable-sized integers) are a format for storing unsigned integers in a small number of bytes, commonly called BER (Binary Encoded Representation). They are stored as base 128 digits, most significant digit first, with as few digits as possible. Bit eight (the high bit) is set on each byte except the last.
+Varints (variable-sized integers) are a format for serialising unsigned integers into a small number of bytes. They are stored as base 128 digits, most significant digit first, with as few digits as possible. Bit eight (the high bit) is set on each byte except the last.
 
     Varint := <Digit+128>* <Digit>
 
@@ -120,7 +124,7 @@ Varints (variable-sized integers) are a format for storing unsigned integers in 
 
 The protocol relies on bounds to group ranges of data items. Each range is specified by an *inclusive* lower bound, followed by an *exclusive* upper bound. As noted above, only upper bounds are transmitted (the lower bound of a range is the upper bound of the previous range, or 0 for the first range).
 
-Each bound consists of an encoded timestamp and a variable-length disambiguating prefix of an event ID (in case multiple items have the same timestamp):
+Each encoded bound consists of an encoded timestamp and a variable-length disambiguating prefix of an event ID (in case multiple items have the same timestamp):
 
     Bound := <encodedTimestamp (Varint)> <length (Varint)> <idPrefix (Byte)>*
 
@@ -128,7 +132,7 @@ Each bound consists of an encoded timestamp and a variable-length disambiguating
 
   Offsets are always non-negative since the upper bound's timestamp is always `>=` to the lower bound's timestamp, ranges in a message are always encoded in ascending order, and ranges never overlap.
 
-* The `idPrefix` parameter's size is encoded in `length`, and can be between `0` and `idSize` bytes. Efficient implementations will use the shortest possible prefix needed to separate the first record of this range from the last record of the previous range. If these records' timestamps differ, then the length should be 0, otherwise it should be the byte-length of their common prefix plus 1.
+* The `idPrefix` parameter's size is encoded in `length`, and can be between `0` and `idSize` bytes, inclusive. Efficient implementations will use the shortest possible prefix needed to separate the first record of this range from the last record of the previous range. If these records' timestamps differ, then the length should be 0, otherwise it should be the byte-length of their common prefix plus 1.
 
   If the `idPrefix` length is less than `idSize` then the omitted trailing bytes are filled with 0 bytes.
 
@@ -140,13 +144,13 @@ IDs are represented as byte-strings truncated to length `idSize`:
 
 A range consists of an upper bound, a mode, and a payload (determined by mode):
 
-    Range := <upperBound (Bound)> <mode (Varint)> <Skip | Fingerprint | IdList | Continuation>
+    Range := <upperBound (Bound)> <mode (Varint)> <Skip | Fingerprint | IdList | Continuation | UnsupportedProtocolVersion>
 
 * If `mode = 0`, then payload is `Skip`, which is simply empty:
 
       Skip :=
 
-* If `mode = 1`, then payload is `Fingerprint`, the bitwise eXclusive OR of all the IDs in this range, truncated to `idSize`:
+* If `mode = 1`, then payload is `Fingerprint`, the SHA-256 hash of all the IDs in this range sorted ascending by `(timestamp,id)` and truncated to `idSize`:
 
       Fingerprint := <Id>
 
@@ -154,19 +158,27 @@ A range consists of an upper bound, a mode, and a payload (determined by mode):
 
       IdList := <length (Varint)> <ids (Id)>*
 
-* If `mode = 4`, then payload is `Continuation`, which is simply empty. If present, a continuation range should always be the last range in a message, and its upperBound should be "infinity".
+* If `mode = 3`, then payload is `Continuation`, which is simply empty. If present, a continuation range should always be the last range in a message, and its upperBound should be "infinity".
 
       Continuation :=
 
-NOTE: A previous version of this protocol defined a `mode = 3` message, but this has now been deprecated and an error should be thrown if this (or any other unexpected mode) is encountered.
+* If `mode = 4`, then payload is `UnsupportedProtocolVersion`. This is created by the server when it is unable to handle the protocol version indicated by the protocol version byte in the initial message. The server's preferred protocol version is stored in the timestamp of the `upperBound` of this range (offset by `0x60`). If the client can support this version then its reply should be another initial message using this protocol version.
+
+      UnsupportedProtocolVersion :=
 
 ### Message
 
-A reconcilliation message is just an ordered list of ranges:
+A reconcilliation message is an ordered list of ranges:
 
     Message := <Range>*
 
-An empty message is an implicit `Skip` over the full universe of IDs, and represents that the protocol can terminate.
+* Zero ranges represents an implicit `Skip` over the full universe of IDs.
+
+The initial message is prefixed by a protocol version byte:
+
+    InitialMessage := <protocolVersion (Byte)> <Message>
+
+* The current protocol version is 0, represented by the byte `0x60`. Protocol version 1 will be `0x61`, and so forth.
 
 
 
@@ -176,7 +188,7 @@ If you are searching for a single record in an ordered array, binary search allo
 
     log(1e6)/log(2) = 19.9316
 
-Negentropy uses a similar principle. Each communication divides items into their own buckets and compares the fingerprints of the buckets. If we always split into 2 buckets, and there was exactly 1 difference, we would cut the search-space in half on each operation.
+Range-based reconcilliation uses a similar principle. Each communication divides items into their own buckets and compares the fingerprints of the buckets. If we always split into 2 buckets, and there was exactly 1 difference, we would cut the search-space in half on each operation.
 
 For effective performance, negentropy requires minimising the number of "round-trips" between the two sides. A sync that takes 20 back-and-forth communications to determine a single difference would take unacceptably long. Fortunately we can expend a small amount of extra bandwidth by splitting our ranges into more than 2 ranges. This has the effect of increasing the base of the logarithm. For example, if we split it into 16 pieces instead:
 
@@ -199,15 +211,11 @@ The amount of bandwidth consumed will grow linearly with the number of differenc
 
 ### C++
 
-The library is contained in a single-header with no non-standard dependencies:
+The library is contained in a single-header with the only dependency being OpenSSL (for SHA-256):
 
     #include "Negentropy.h"
 
-First, create a `Negentropy` object. The `16` argument is `idSize`:
-
-    Negentropy ne(16);
-
-There is an optional constructor parameter, `frameSizeLimit` which is the maximum size message that will be created, in bytes:
+First, create a `Negentropy` object. The `16` argument is `idSize` and which is followed by an optional `frameSizeLimit`:
 
     Negentropy ne(16, 50'000);
 
@@ -223,18 +231,23 @@ On the client-side, create an initial message, and then transmit it to the serve
 
     std::string msg = ne.initiate();
 
-    while (msg.size() != 0) {
+    while (true) {
         std::string response = queryServer(msg);
+
         std::vector<std::string> have, need;
-        msg = ne.reconcile(response, have, need);
+        std::optional<std::string> newMsg = ne.reconcile(response, have, need);
+
         // handle have/need
+
+        if (!newMsg) break; // done
+        else std::swap(msg, *newMsg);
     }
 
 In each loop iteration, `have` contains IDs that the client has that the server doesn't, and `need` contains IDs that the server has that the client doesn't.
 
-The server-side is similar, except it doesn't create an initial message, and there are no `have`/`need` arrays:
+The server-side is similar, except it doesn't create an initial message, there are no `have`/`need` arrays, and it doesn't return an optional (servers must always reply to a request):
 
-    while (1) {
+    while (true) {
         std::string msg = receiveMsgFromClient();
         std::string response = ne.reconcile(msg);
         respondToClient(response);
@@ -258,45 +271,64 @@ Next, add all the items in your collection, and `seal()`:
 
     ne.seal();
 
-*  `timestamp` should be a JS number
+*  `timestamp` should be a JS `Number`
 *  `id` should be a hex string, `Uint8Array`, or node.js `Buffer`
 
-On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete:
+On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete (signified by returning `null` for `newMsg`):
 
-    let msg = ne.initiate();
+    let msg = await ne.initiate();
 
-    while (msg.length != 0) {
+    while (msg.length !== null) {
         let response = queryServer(msg);
-        let [newMsg, have, need] = ne.reconcile(msg);
+        let [newMsg, have, need] = await ne.reconcile(msg);
         msg = newMsg;
         // handle have/need
     }
 
 *  The output `msg`s and the IDs in `have`/`need` are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
 
-The server-side is similar, except it doesn't create an initial message, and there are no `have`/`need` arrays:
+The server-side is similar, except it doesn't create an initial message, there are no `have`/`need` arrays, and `newMsg` will never be `null`:
 
     while (1) {
         let msg = receiveMsgFromClient();
-        let [response] = ne.reconcile(msg);
-        respondToClient(response);
+        let [newMsg] = await ne.reconcile(msg);
+        respondToClient(newMsg);
     }
 
+* The `initiate()` and `reconcile()` methods are async because the `crypto.subtle.digest()` browser API is async.
+* Timestamp values greater than `Number.MAX_VALUE` will currently cause failures.
 
-## Implementation Enhancements
+### Rust
 
-### Pre-computing
+A third-party Rust implementation by Yuki Kishimoto is available in the [rust-negentropy](https://github.com/yukibtc/rust-negentropy) repository.
 
-Instead of aggregating the data items for each query, servers and/or clients may choose to pre-compute fingerprints for their entire set of data items, or particular subsets. Most likely, fingerprints will be aggregated in a tree data-structure so it is efficient to add or remove items.
+The reference test suite can be run against this implementation by checking it out in the same directory as the `negentropy` repo, building the `harness` commands for both C++ and Rust, and then inside `negentropy/test/` directory running `perl test.pl cpp,rust`
 
-How or if this is implemented is independent of the protocol as described in this document.
 
+
+## Adversarial Input
+
+Negentropy is intended to be secure against a user who can insert arbitrary records into the DBs of one or both parties of the protocol. Secure in this sense means that the reconciliation will succeed without missing any records. A previous version of negentropy used xor to combine hashes, meaning it was only suitable for trusted input, or application-level countermeasures should have been taken (as described in Meyer's master's thesis).
+
+Note that the threat model does not include one of the sides of the parties in the protocol themselves being malicious (except that implementations should obviously be secure against implementation defects such as buffer overflows, etc). In this case, a malicious party could always pretend to have or not have records in the first place, meaning that corrupting the protocol doesn't gain them anything additional, except possibly wasting the other side's CPU/bandwidth/memory resources.
+
+
+## Pre-computing Fingerprints
+
+The reference implementations work by storing the IDs (sorted by timestamp and then id) in a contiguous memory buffer. This means that a single call to the SHA-256 hash function is sufficient for computing the fingerprint of any sub-range. The result is that fingerprints can be computed rapidly, especially when using dedicated CPU instructions. On my laptop, computing a fingerprint for 1 million records (with ID size 16) takes approximately 1 millisecond.
+
+However, for extremely large DBs, and also in cases where a significant amount of IO would be required to load all the IDs into a contiguous memory buffer, it would be helpful to be able to pre-compute fingerprints. As Meyer points out, storing a fingerprint for every possible sub-range would be infeasible, and SHA-256 cannot be computed incrementally, which reduces our options.
+
+Fortunately, because of the flexibility of the range-based approach, we can still pre-compute fingerprints for various common ranges, and then direct the protocol to prefer using those ranges. For example, suppose we wanted to send a large range that we haven't pre-computed, but we have several pre-computed sub-ranges within this range. The protocol functions perfectly well if we instead sent multiple adjacent range fingerprints instead of re-hashing the entire range, at the expense of some extra bandwidth usage.
+
+For example, suppose we pre-computed the fingerprints for all records within each day. In this case, when performing a reconcilliation, these daily ranges would always be preferred. Depending on how many records are stored each day, perhaps hourly fingerprints would be pre-computed in addition. When reconciling differing hours, it would fall back to loading the IDs into contiguous memory regions.
+
+This approach will work best if all participants in the system agree on globally-consistent daily/hourly boundaries. Because most often records that are being inserted or modified are for the current day, it may not be beneficial to pre-compute the current day's fingerprint as it would be changing too frequently. But a corollary to this is that re-computing the fingerprints of old/archival ranges would be infrequent.
 
 
 ## Use-Cases
 
 * [Bandwidth-efficient Nostr event syncing](https://github.com/hoytech/strfry/blob/next/docs/negentropy.md)
-
 
 
 ## Copyright
