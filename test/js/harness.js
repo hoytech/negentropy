@@ -32,12 +32,13 @@ rl.on('line', async (line) => {
         let q = items[1];
         let [newQ, haveIds, needIds] = await ne.reconcile(q);
         q = newQ;
-        if (frameSizeLimit && q.length/2 > frameSizeLimit) throw Error("frameSizeLimit exceeded");
 
         for (let id of haveIds) console.log(`have,${id}`);
         for (let id of needIds) console.log(`need,${id}`);
 
-        if (ne.isInitiator && q.length === 0) {
+        if (frameSizeLimit && q !== null && q.length/2 > frameSizeLimit) throw Error("frameSizeLimit exceeded");
+
+        if (q === null) {
             console.log(`done`);
         } else {
             console.log(`msg,${q}`);
