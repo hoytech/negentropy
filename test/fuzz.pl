@@ -19,7 +19,7 @@ sub harnessTypeToCmd {
     } elsif ($harnessType eq 'js') {
         return 'node js/harness.js';
     } elsif ($harnessType eq 'rust') {
-        return '../../rust-negentropy/target/debug/examples/harness';
+        return '../../rust-negentropy/target/debug/harness';
     }
 
     die "unknown harness type: $harnessType";
