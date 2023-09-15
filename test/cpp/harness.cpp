@@ -54,15 +54,17 @@ int main() {
 
             if (ne.isInitiator) {
                 std::vector<std::string> have, need;
-                q = ne.reconcile(q, have, need);
+                auto resp = ne.reconcile(q, have, need);
 
                 for (auto &id : have) std::cout << "have," << hoytech::to_hex(id) << "\n";
                 for (auto &id : need) std::cout << "need," << hoytech::to_hex(id) << "\n";
 
-                if (q.size() == 0) {
+                if (!resp) {
                     std::cout << "done" << std::endl;
                     continue;
                 }
+
+                q = *resp;
             } else {
                 q = ne.reconcile(q);
             }
