@@ -101,6 +101,7 @@ my $totalDown = 0;
 
 while (1) {
     my $msg = <$outfile1>;
+    chomp $msg;
     print "[1]: $msg\n" if $ENV{DEBUG};
 
     if ($msg =~ /^(have|need),(\w+)/) {
@@ -115,8 +116,9 @@ while (1) {
         }
 
         next;
-    } elsif ($msg =~ /^msg,(\w+)/) {
+    } elsif ($msg =~ /^msg,(\w*)/) {
         my $data = $1;
+        print "DELTATRACE1 $data\n" if $ENV{DELTATRACE};
         print $infile2 "msg,$data\n";
 
         my $bytes = length($data) / 2;
@@ -133,6 +135,7 @@ while (1) {
 
     if ($msg =~ /^msg,(\w*)/) {
         my $data = $1;
+        print "DELTATRACE2 $data\n" if $ENV{DELTATRACE};
         print $infile1 "msg,$data\n";
 
         my $bytes = length($data) / 2;
