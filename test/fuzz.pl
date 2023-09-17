@@ -5,25 +5,14 @@ $|++;
 
 use IPC::Open2;
 use Session::Token;
+use FindBin;
+use lib "$FindBin::Bin";
+use Utils;
 
 die "usage: $0 <lang1> <lang2>" if @ARGV < 2;
-my $harnessCmd1 = harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
-my $harnessCmd2 = harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
+my $harnessCmd1 = Utils::harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
+my $harnessCmd2 = Utils::harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
 my $idSize = shift || 16;
-
-sub harnessTypeToCmd {
-    my $harnessType = shift;
-
-    if ($harnessType eq 'cpp') {
-        return './cpp/harness';
-    } elsif ($harnessType eq 'js') {
-        return 'node js/harness.js';
-    } elsif ($harnessType eq 'rust') {
-        return '../../rust-negentropy/target/debug/harness';
-    }
-
-    die "unknown harness type: $harnessType";
-}
 
 
 srand($ENV{SEED} || 0);

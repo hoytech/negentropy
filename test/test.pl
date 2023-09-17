@@ -63,6 +63,13 @@ if (@langs >= 2) {
 
 
 
+## Protocol upgrade tests
+
+foreach my $lang (@langs) {
+    note("------- PROTO UPGRADE $lang -------");
+    run("perl protoversion.pl $lang");
+}
+
 
 
 ########
