@@ -1,6 +1,6 @@
 ![negentropy logo](docs/logo.svg)
 
-This repo contains the protocol specification, reference implementations, and tests for the negentropy set-reconcilliation protocol.
+This repo contains the protocol specification, reference implementations, and tests for the negentropy set-reconciliation protocol.
 
 <!-- TOC FOLLOWS -->
 <!-- START OF TOC -->
@@ -30,9 +30,9 @@ This repo contains the protocol specification, reference implementations, and te
 
 ## Introduction
 
-Set reconcilliation supports the replication or syncing of data-sets, either because they were created independently, or because they have drifted out of sync due to downtime, network partitions, misconfigurations, etc. In the latter case, detecting and fixing these inconsistencies is sometimes called [anti-entropy repair](https://docs.datastax.com/en/cassandra-oss/3.x/cassandra/operations/opsRepairNodesManualRepair.html).
+Set-reconciliation supports the replication or syncing of data-sets, either because they were created independently, or because they have drifted out of sync due to downtime, network partitions, misconfigurations, etc. In the latter case, detecting and fixing these inconsistencies is sometimes called [anti-entropy repair](https://docs.datastax.com/en/cassandra-oss/3.x/cassandra/operations/opsRepairNodesManualRepair.html).
 
-Suppose two participants on a network each have a set of records that they have collected independently. Set-reconcilliation efficiently determines which records one side has that the other side doesn't, and vice versa. After the records that are missing have been determined, this information can be used to transfer the missing data items. The actual transfer is external to the negentropy protocol.
+Suppose two participants on a network each have a set of records that they have collected independently. Set-reconciliation efficiently determines which records one side has that the other side doesn't, and vice versa. After the records that are missing have been determined, this information can be used to transfer the missing data items. The actual transfer is external to the negentropy protocol.
 
 Negentropy is based on Aljoscha Meyer's work on "Range-Based Set Reconciliation" ([overview](https://github.com/AljoschaMeyer/set-reconciliation) / [paper](https://arxiv.org/abs/2212.13567) / [master's thesis](https://github.com/AljoschaMeyer/master_thesis/blob/main/main.pdf)).
 
@@ -63,11 +63,11 @@ The two parties engaged in the protocol are called the client and the server. Th
 
 Each party should begin by sorting their records in ascending order by timestamp. If the timestamps are equivalent, records should be sorted lexically by their IDs. This sorted array and contiguous slices of it are called *ranges*. The *fingerprint* of a range is equal to the SHA-256 hash of the IDs of all records within this range (sorted as described above).
 
-Because each side potentially has a different set of records, ranges cannot be referred to by their indices in one side's sorted array. Instead, they are specified by lower and upper *bounds*. A bound is a timestamp and a variable-length ID prefix. In order to reduce the sizes of reconcilliation messages, ID prefixes are as short as possible while still being able to separate records from their predecessors in the sorted array. If two adjacent records have different timestamps, then the prefix for a bound between them is empty.
+Because each side potentially has a different set of records, ranges cannot be referred to by their indices in one side's sorted array. Instead, they are specified by lower and upper *bounds*. A bound is a timestamp and a variable-length ID prefix. In order to reduce the sizes of reconciliation messages, ID prefixes are as short as possible while still being able to separate records from their predecessors in the sorted array. If two adjacent records have different timestamps, then the prefix for a bound between them is empty.
 
 Lower bounds are *inclusive* and upper bounds are *exclusive*, as is [typical in computer science](https://www.cs.utexas.edu/users/EWD/transcriptions/EWD08xx/EWD831.html). This means that given two adjacent ranges, the upper bound of the first is equal to the lower bound of the second. In order for a range to have full coverage over the universe of possible timestamps/IDs, the lower bound would have a 0 timestamp and all-0s ID, and the upper-bound would be the specially reserved "infinity" timestamp (max u64), and the ID doesn't matter.
 
-When negotiating a reconcilliation, the client and server should decide on a special `idSize` value. It must satisfy `8 <= idSize <= 32`. Using values less than the full 32 bytes will save bandwidth, at the expense of making collisions more likely.
+When negotiating a reconciliation, the client and server should decide on a special `idSize` value. It must satisfy `8 <= idSize <= 32`. Using values less than the full 32 bytes will save bandwidth, at the expense of making collisions more likely.
 
 ### Alternating Messages
 
@@ -168,7 +168,7 @@ A range consists of an upper bound, a mode, and a payload (determined by mode):
 
 ### Message
 
-A reconcilliation message is an ordered list of ranges:
+A reconciliation message is an ordered list of ranges:
 
     Message := <Range>*
 
@@ -188,7 +188,7 @@ If you are searching for a single record in an ordered array, binary search allo
 
     log(1e6)/log(2) = 19.9316
 
-Range-based reconcilliation uses a similar principle. Each communication divides items into their own buckets and compares the fingerprints of the buckets. If we always split into 2 buckets, and there was exactly 1 difference, we would cut the search-space in half on each operation.
+Range-based reconciliation uses a similar principle. Each communication divides items into their own buckets and compares the fingerprints of the buckets. If we always split into 2 buckets, and there was exactly 1 difference, we would cut the search-space in half on each operation.
 
 For effective performance, negentropy requires minimising the number of "round-trips" between the two sides. A sync that takes 20 back-and-forth communications to determine a single difference would take unacceptably long. Fortunately we can expend a small amount of extra bandwidth by splitting our ranges into more than 2 ranges. This has the effect of increasing the base of the logarithm. For example, if we split it into 16 pieces instead:
 
@@ -321,7 +321,7 @@ However, for extremely large DBs, and also in cases where a significant amount o
 
 Fortunately, because of the flexibility of the range-based approach, we can still pre-compute fingerprints for various common ranges, and then direct the protocol to prefer using those ranges. For example, suppose we wanted to send a large range that we haven't pre-computed, but we have several pre-computed sub-ranges within this range. The protocol functions perfectly well if we instead sent multiple adjacent range fingerprints instead of re-hashing the entire range, at the expense of some extra bandwidth usage.
 
-For example, suppose we pre-computed the fingerprints for all records within each day. In this case, when performing a reconcilliation, these daily ranges would always be preferred. Depending on how many records are stored each day, perhaps hourly fingerprints would be pre-computed in addition. When reconciling differing hours, it would fall back to loading the IDs into contiguous memory regions.
+For example, suppose we pre-computed the fingerprints for all records within each day. In this case, when performing a reconciliation, these daily ranges would always be preferred. Depending on how many records are stored each day, perhaps hourly fingerprints would be pre-computed in addition. When reconciling differing hours, it would fall back to loading the IDs into contiguous memory regions.
 
 This approach will work best if all participants in the system agree on globally-consistent daily/hourly boundaries. Because most often records that are being inserted or modified are for the current day, it may not be beneficial to pre-compute the current day's fingerprint as it would be changing too frequently. But a corollary to this is that re-computing the fingerprints of old/archival ranges would be infrequent.
 
