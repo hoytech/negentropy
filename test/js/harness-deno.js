@@ -1,20 +1,15 @@
-const readline = require('readline');
-const Negentropy = require('../../js/Negentropy.js');
+import { readline } from "https://deno.land/x/readline@v1.1.0/mod.ts";
+import Negentropy from "../../js/Negentropy.mjs";
 
 const idSize = 16;
 
 let frameSizeLimit = 0;
-if (process.env.FRAMESIZELIMIT) frameSizeLimit = parseInt(process.env.FRAMESIZELIMIT);
-
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-    terminal: false
-});
+if (Deno.env.get("FRAMESIZELIMIT")) frameSizeLimit = parseInt(Deno.env.get("FRAMESIZELIMIT"));
 
 let ne = new Negentropy(idSize, frameSizeLimit);
 
-rl.on('line', async (line) => {
+for await (let line of readline(Deno.stdin)) {
+    line = new TextDecoder().decode(line);
     let items = line.split(',');
 
     if (items[0] == "item") {
@@ -46,8 +41,4 @@ rl.on('line', async (line) => {
     } else {
         throw Error(`unknown cmd: ${items[0]}`);
     }
-});
-
-rl.on('close', () => {
-    process.exit(0);
-});
+}

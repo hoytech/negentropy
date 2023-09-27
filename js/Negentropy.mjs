@@ -66,7 +66,7 @@ export default class Negentropy {
         this.pendingOutputs = [];
 
         if (typeof window === 'undefined') { // node.js
-            const crypto = require('crypto');
+            const crypto = require('crypto'); // FIXME: can't do this with ES6 modules :(
             this.sha256 = async (slice) => new Uint8Array(crypto.createHash('sha256').update(slice).digest());
         } else { // browser
             this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
