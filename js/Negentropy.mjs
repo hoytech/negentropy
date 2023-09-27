@@ -54,7 +54,7 @@ class WrappedBuffer {
 }
 
 
-class Negentropy {
+export default class Negentropy {
     constructor(idSize = 16, frameSizeLimit = 0) {
         if (idSize < 8 || idSize > 32) throw Error("idSize invalid");
         if (frameSizeLimit !== 0 && frameSizeLimit < 4096) throw Error("frameSizeLimit too small");
@@ -539,6 +539,3 @@ function itemCompare(a, b) {
 
     return a.timestamp - b.timestamp;
 }
-
-
-module.exports = Negentropy;
