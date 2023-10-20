@@ -1,10 +1,13 @@
 #include <iostream>
 #include <sstream>
+#include <memory>
 
 #include <hoytech/error.h>
 #include <hoytech/hex.h>
 
-#include "Negentropy.h"
+#include "negentropy.h"
+#include "negentropy/storage/BTreeMem.h"
+#include "negentropy/storage/Vector.h"
 
 
 
@@ -23,12 +26,11 @@ std::vector<std::string> split(const std::string &s, char delim) {
 
 
 int main() {
-    const uint64_t idSize = 16;
-
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    Negentropy ne(idSize, frameSizeLimit);
+    negentropy::storage::Vector storage;
+    std::unique_ptr<Negentropy<negentropy::storage::Vector>> ne;
 
     std::string line;
     while (std::cin) {
@@ -41,20 +43,21 @@ int main() {
             if (items.size() != 3) throw hoytech::error("wrong num of fields");
             uint64_t created = std::stoull(items[1]);
             auto id = hoytech::from_hex(items[2]);
-            ne.addItem(created, id);
+            storage.insert(created, id);
         } else if (items[0] == "seal") {
-            ne.seal();
+            storage.seal();
+            ne = std::make_unique<Negentropy<negentropy::storage::Vector>>(storage, frameSizeLimit);
         } else if (items[0] == "initiate") {
-            auto q = ne.initiate();
-            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded");
+            auto q = ne->initiate();
+            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("initiate frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit);
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else if (items[0] == "msg") {
             std::string q;
             if (items.size() >= 2) q = hoytech::from_hex(items[1]);
 
-            if (ne.isInitiator) {
+            if (ne->isInitiator) {
                 std::vector<std::string> have, need;
-                auto resp = ne.reconcile(q, have, need);
+                auto resp = ne->reconcile(q, have, need);
 
                 for (auto &id : have) std::cout << "have," << hoytech::to_hex(id) << "\n";
                 for (auto &id : need) std::cout << "need," << hoytech::to_hex(id) << "\n";
@@ -66,10 +69,10 @@ int main() {
 
                 q = *resp;
             } else {
-                q = ne.reconcile(q);
+                q = ne->reconcile(q);
             }
 
-            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded");
+            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit, ": from ", (ne->isInitiator ? "initiator" : "non-initiator"));
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else {
             throw hoytech::error("unknown cmd: ", items[0]);
