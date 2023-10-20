@@ -22,6 +22,8 @@ namespace negentropy {
 const uint64_t PROTOCOL_VERSION_0 = 0x60;
 
 const uint64_t MAX_U64 = std::numeric_limits<uint64_t>::max();
+const size_t ID_SIZE = 32;
+const size_t FINGERPRINT_SIZE = 16;
 using err = std::runtime_error;
 
 
@@ -36,21 +38,19 @@ enum class Mode {
 
 struct Item {
     uint64_t timestamp;
-    uint64_t idSize;
-    char id[32];
+    char id[ID_SIZE];
 
-    Item(uint64_t timestamp = 0) : timestamp(timestamp), idSize(0) {
+    explicit Item(uint64_t timestamp = 0) : timestamp(timestamp) {
         memset(id, '\0', sizeof(id));
     }
 
-    Item(uint64_t timestamp, std::string_view id_) : timestamp(timestamp), idSize(id_.size()) {
-        if (id_.size() > 32) throw negentropy::err("id too big");
-        memset(id, '\0', sizeof(id));
-        memcpy(id, id_.data(), id_.size());
+    explicit Item(uint64_t timestamp, std::string_view id_) : timestamp(timestamp) {
+        if (id_.size() != sizeof(id)) throw negentropy::err("bad id size for Item");
+        memcpy(id, id_.data(), sizeof(id));
     }
 
     std::string_view getId() const {
-        return std::string_view(id, idSize);
+        return std::string_view(id, sizeof(id));
     }
 
     bool operator==(const Item &other) const {
@@ -62,14 +62,25 @@ inline bool operator<(const Item &a, const Item &b) {
     return a.timestamp != b.timestamp ? a.timestamp < b.timestamp : a.getId() < b.getId();
 };
 
+struct Bound {
+    Item item;
+    size_t idLen;
+
+    explicit Bound(uint64_t timestamp = 0, std::string_view id = "") : item(timestamp), idLen(id.size()) {
+        if (idLen > 32) throw negentropy::err("bad id size for Bound");
+        memcpy(item.id, id.data(), idLen);
+    }
+
+    explicit Bound(const Item &item_) : item(item_), idLen(32) {}
+};
+
 
 struct Negentropy {
-    uint64_t idSize;
     uint64_t frameSizeLimit;
 
     struct OutputRange {
-        Item start;
-        Item end;
+        Bound start;
+        Bound end;
         std::string payload;
     };
 
@@ -82,16 +93,15 @@ struct Negentropy {
     bool continuationNeeded = false;
     std::deque<OutputRange> pendingOutputs;
 
-    Negentropy(uint64_t idSize = 16, uint64_t frameSizeLimit = 0) : idSize(idSize), frameSizeLimit(frameSizeLimit) {
-        if (idSize < 8 || idSize > 32) throw negentropy::err("idSize invalid");
+    Negentropy(uint64_t frameSizeLimit = 0) : frameSizeLimit(frameSizeLimit) {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
     void addItem(uint64_t createdAt, std::string_view id) {
         if (sealed) throw negentropy::err("already sealed");
-        if (id.size() < idSize) throw negentropy::err("bad id size");
+        if (id.size() != ID_SIZE) throw negentropy::err("bad id size for added item");
 
-        addedItems.emplace_back(createdAt, id.substr(0, idSize));
+        addedItems.emplace_back(createdAt, id.substr(0, ID_SIZE));
     }
 
     void seal() {
@@ -107,7 +117,7 @@ struct Negentropy {
         }
 
         itemTimestamps.reserve(addedItems.size());
-        itemIds.reserve(addedItems.size() * idSize);
+        itemIds.reserve(addedItems.size() * ID_SIZE);
 
         for (const auto &item : addedItems) {
             itemTimestamps.push_back(item.timestamp);
@@ -123,7 +133,7 @@ struct Negentropy {
         if (didHandshake) throw negentropy::err("can't initiate after reconcile");
         isInitiator = true;
 
-        splitRange(0, numItems(), Item(0), Item(MAX_U64), pendingOutputs);
+        splitRange(0, numItems(), Bound(0), Bound(MAX_U64), pendingOutputs);
 
         auto output = std::move(buildOutput(true).value());
         return output;
@@ -138,7 +148,7 @@ struct Negentropy {
             if (protocolVersion != PROTOCOL_VERSION_0) {
                 std::string o;
                 uint64_t lastTimestampOut = 0;
-                o += encodeBound(Item(PROTOCOL_VERSION_0), lastTimestampOut);
+                o += encodeBound(Bound(PROTOCOL_VERSION_0), lastTimestampOut);
                 o += encodeVarInt(uint64_t(Mode::UnsupportedProtocolVersion));
                 return o;
             }
@@ -166,7 +176,7 @@ struct Negentropy {
     }
 
     std::string_view getItemId(size_t i) {
-        return std::string_view(itemIds.data() + (i * idSize), idSize);
+        return std::string_view(itemIds.data() + (i * ID_SIZE), ID_SIZE);
     }
 
     Item getItem(size_t i) {
@@ -175,15 +185,15 @@ struct Negentropy {
 
     std::string computeFingerprint(size_t lower, size_t num) {
         unsigned char hash[SHA256_DIGEST_LENGTH];
-        SHA256(reinterpret_cast<unsigned char*>(itemIds.data() + (lower * idSize)), num * idSize, hash);
-        return std::string(reinterpret_cast<char*>(hash), idSize);
+        SHA256(reinterpret_cast<unsigned char*>(itemIds.data() + (lower * ID_SIZE)), num * ID_SIZE, hash);
+        return std::string(reinterpret_cast<char*>(hash), FINGERPRINT_SIZE);
     }
 
     void reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!sealed) throw negentropy::err("not sealed");
         continuationNeeded = false;
 
-        Item prevBound;
+        Bound prevBound;
         size_t prevIndex = 0;
         uint64_t lastTimestampIn = 0;
         std::deque<OutputRange> outputs;
@@ -198,7 +208,7 @@ struct Negentropy {
             if (mode == Mode::Skip) {
                 // Do nothing
             } else if (mode == Mode::Fingerprint) {
-                auto theirFingerprint = getBytes(query, idSize);
+                auto theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
                 auto ourFingerprint = computeFingerprint(lower, upper - lower);
 
                 if (theirFingerprint != ourFingerprint) {
@@ -209,7 +219,7 @@ struct Negentropy {
 
                 std::unordered_set<std::string> theirElems;
                 for (uint64_t i = 0; i < numIds; i++) {
-                    auto e = getBytes(query, idSize);
+                    auto e = getBytes(query, ID_SIZE);
                     theirElems.insert(e);
                 }
 
@@ -235,7 +245,7 @@ struct Negentropy {
 
                     auto it = lower;
                     bool didSplit = false;
-                    Item splitBound;
+                    Bound splitBound;
 
                     auto flushIdListOutput = [&]{
                         std::string payload = encodeVarInt(uint64_t(Mode::IdList));
@@ -282,7 +292,7 @@ struct Negentropy {
         }
     }
 
-    void splitRange(size_t lower, size_t upper, const Item &lowerBound, const Item &upperBound, std::deque<OutputRange> &outputs) {
+    void splitRange(size_t lower, size_t upper, const Bound &lowerBound, const Bound &upperBound, std::deque<OutputRange> &outputs) {
         uint64_t numElems = upper - lower;
         const uint64_t buckets = 16;
 
@@ -300,7 +310,7 @@ struct Negentropy {
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;
-            Item prevBound = getItem(curr);
+            auto prevBound = Bound(getItem(curr));
 
             for (uint64_t i = 0; i < buckets; i++) {
                 auto bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
@@ -325,7 +335,7 @@ struct Negentropy {
 
     std::optional<std::string> buildOutput(bool initialMessage) {
         std::string output;
-        Item currBound;
+        Bound currBound;
         uint64_t lastTimestampOut = 0;
 
         if (initialMessage) {
@@ -334,7 +344,7 @@ struct Negentropy {
             output.push_back(PROTOCOL_VERSION_0);
         }
 
-        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start < b.start; });
+        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start.item < b.start.item; });
 
         while (pendingOutputs.size()) {
             std::string o;
@@ -342,9 +352,9 @@ struct Negentropy {
             auto &p = pendingOutputs.front();
 
             // If bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
-            if (p.start < currBound) break;
+            if (p.start.item < currBound.item) break;
 
-            if (currBound != p.start) {
+            if (currBound.item != p.start.item) {
                 o += encodeBound(p.start, lastTimestampOut);
                 o += encodeVarInt(uint64_t(Mode::Skip));
             }
@@ -362,7 +372,7 @@ struct Negentropy {
         // Server indicates that it has more to send, OR ensure client sends a non-empty message
 
         if (!isInitiator && pendingOutputs.size()) {
-            output += encodeBound(Item(MAX_U64), lastTimestampOut);
+            output += encodeBound(Bound(MAX_U64), lastTimestampOut);
             output += encodeVarInt(uint64_t(Mode::Continuation));
         }
 
@@ -373,7 +383,7 @@ struct Negentropy {
         return output;
     }
 
-    size_t findUpperBound(size_t first, size_t last, const Item &value) {
+    size_t findUpperBound(size_t first, size_t last, const Bound &value) {
         size_t count = last - first;
 
         while (count > 0) {
@@ -381,7 +391,7 @@ struct Negentropy {
             size_t step = count / 2;
             it += step;
 
-            if (value.timestamp == itemTimestamps[it] ? value.getId() < getItemId(it) : value.timestamp < itemTimestamps[it]) {
+            if (value.item.timestamp == itemTimestamps[it] ? value.item.getId() < getItemId(it) : value.item.timestamp < itemTimestamps[it]) {
                 count = step;
             } else {
                 first = ++it;
@@ -432,10 +442,10 @@ struct Negentropy {
         return timestamp;
     }
 
-    Item decodeBound(std::string_view &encoded, uint64_t &lastTimestampIn) {
+    Bound decodeBound(std::string_view &encoded, uint64_t &lastTimestampIn) {
         auto timestamp = decodeTimestampIn(encoded, lastTimestampIn);
         auto len = decodeVarInt(encoded);
-        return Item(timestamp, getBytes(encoded, len));
+        return Bound(timestamp, getBytes(encoded, len));
     }
 
 
@@ -472,30 +482,30 @@ struct Negentropy {
         return encodeVarInt(timestamp + 1);
     };
 
-    std::string encodeBound(const Item &bound, uint64_t &lastTimestampOut) {
+    std::string encodeBound(const Bound &bound, uint64_t &lastTimestampOut) {
         std::string output;
 
-        output += encodeTimestampOut(bound.timestamp, lastTimestampOut);
-        output += encodeVarInt(bound.idSize);
-        output += bound.getId();
+        output += encodeTimestampOut(bound.item.timestamp, lastTimestampOut);
+        output += encodeVarInt(bound.idLen);
+        output += bound.item.getId().substr(0, bound.idLen);
 
         return output;
     };
 
-    Item getMinimalBound(const Item &prev, const Item &curr) {
+    Bound getMinimalBound(const Item &prev, const Item &curr) {
         if (curr.timestamp != prev.timestamp) {
-            return Item(curr.timestamp, "");
+            return Bound(curr.timestamp, "");
         } else {
             uint64_t sharedPrefixBytes = 0;
             auto currKey = curr.getId();
             auto prevKey = prev.getId();
 
-            for (uint64_t i = 0; i < idSize; i++) {
+            for (uint64_t i = 0; i < ID_SIZE; i++) {
                 if (currKey[i] != prevKey[i]) break;
                 sharedPrefixBytes++;
             }
 
-            return Item(curr.timestamp, currKey.substr(0, sharedPrefixBytes + 1));
+            return Bound(curr.timestamp, currKey.substr(0, sharedPrefixBytes + 1));
         }
     }
 };

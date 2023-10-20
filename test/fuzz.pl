@@ -12,9 +12,9 @@ use Utils;
 die "usage: $0 <lang1> <lang2>" if @ARGV < 2;
 my $harnessCmd1 = Utils::harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
 my $harnessCmd2 = Utils::harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
-my $idSize = shift || 16;
 
 
+my $idSize = 32;
 srand($ENV{SEED} || 0);
 my $stgen = Session::Token->new(seed => "\x00" x 1024, alphabet => '0123456789abcdef', length => $idSize * 2);
 

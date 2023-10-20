@@ -23,12 +23,10 @@ std::vector<std::string> split(const std::string &s, char delim) {
 
 
 int main() {
-    const uint64_t idSize = 16;
-
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    Negentropy ne(idSize, frameSizeLimit);
+    Negentropy ne(frameSizeLimit);
 
     std::string line;
     while (std::cin) {

@@ -11,7 +11,6 @@ use Utils;
 
 die "usage: $0 <lang>" if @ARGV < 1;
 my $harnessCmd = Utils::harnessTypeToCmd(shift) || die "please provide harness type (cpp, js, etc)";
-my $idSize = shift || 16;
 
 
 my $expectedResp;
@@ -22,7 +21,7 @@ my $expectedResp;
     my ($infile, $outfile);
     my $pid = open2($outfile, $infile, $harnessCmd);
 
-    print $infile "item,12345,eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
+    print $infile "item,12345,eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
     print $infile "seal\n";
     print $infile "msg,6000000200\n"; ## full range bound, empty IdList
 
@@ -38,7 +37,7 @@ my $expectedResp;
     my ($infile, $outfile);
     my $pid = open2($outfile, $infile, $harnessCmd);
 
-    print $infile "item,12345,eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
+    print $infile "item,12345,eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n";
     print $infile "seal\n";
 
     print $infile "msg,61aabbccddeeff\n"; ## some new protocol message
