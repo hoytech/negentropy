@@ -72,6 +72,14 @@ struct Bound {
     }
 
     explicit Bound(const Item &item_) : item(item_), idLen(32) {}
+
+    bool operator==(const Bound &other) const {
+        return item == other.item;
+    }
+};
+
+inline bool operator<(const Bound &a, const Bound &b) {
+    return a.item < b.item;
 };
 
 
@@ -344,7 +352,7 @@ struct Negentropy {
             output.push_back(PROTOCOL_VERSION_0);
         }
 
-        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start.item < b.start.item; });
+        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start < b.start; });
 
         while (pendingOutputs.size()) {
             std::string o;
@@ -352,9 +360,9 @@ struct Negentropy {
             auto &p = pendingOutputs.front();
 
             // If bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
-            if (p.start.item < currBound.item) break;
+            if (p.start < currBound) break;
 
-            if (currBound.item != p.start.item) {
+            if (currBound != p.start) {
                 o += encodeBound(p.start, lastTimestampOut);
                 o += encodeVarInt(uint64_t(Mode::Skip));
             }
