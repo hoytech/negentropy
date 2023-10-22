@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <optional>
+#include <bit>
 
 #include <openssl/sha.h>
 
@@ -25,6 +26,58 @@ const uint64_t MAX_U64 = std::numeric_limits<uint64_t>::max();
 const size_t ID_SIZE = 32;
 const size_t FINGERPRINT_SIZE = 16;
 using err = std::runtime_error;
+
+
+
+
+inline uint8_t getByte(std::string_view &encoded) {
+    if (encoded.size() < 1) throw negentropy::err("parse ends prematurely");
+    uint8_t output = encoded[0];
+    encoded = encoded.substr(1);
+    return output;
+}
+
+inline std::string getBytes(std::string_view &encoded, size_t n) {
+    if (encoded.size() < n) throw negentropy::err("parse ends prematurely");
+    auto res = encoded.substr(0, n);
+    encoded = encoded.substr(n);
+    return std::string(res);
+};
+
+inline uint64_t decodeVarInt(std::string_view &encoded) {
+    uint64_t res = 0;
+
+    while (1) {
+        if (encoded.size() == 0) throw negentropy::err("premature end of varint");
+        uint64_t byte = encoded[0];
+        encoded = encoded.substr(1);
+        res = (res << 7) | (byte & 0b0111'1111);
+        if ((byte & 0b1000'0000) == 0) break;
+    }
+
+    return res;
+}
+
+inline std::string encodeVarInt(uint64_t n) {
+    if (n == 0) return std::string(1, '\0');
+
+    std::string o;
+
+    while (n) {
+        o.push_back(static_cast<unsigned char>(n & 0x7F));
+        n >>= 7;
+    }
+
+    std::reverse(o.begin(), o.end());
+
+    for (size_t i = 0; i < o.size() - 1; i++) {
+        o[i] |= 0x80;
+    }
+
+    return o;
+}
+
+
 
 
 enum class Mode {
@@ -62,16 +115,17 @@ inline bool operator<(const Item &a, const Item &b) {
     return a.timestamp != b.timestamp ? a.timestamp < b.timestamp : a.getId() < b.getId();
 };
 
+
 struct Bound {
     Item item;
     size_t idLen;
 
     explicit Bound(uint64_t timestamp = 0, std::string_view id = "") : item(timestamp), idLen(id.size()) {
-        if (idLen > 32) throw negentropy::err("bad id size for Bound");
+        if (idLen > ID_SIZE) throw negentropy::err("bad id size for Bound");
         memcpy(item.id, id.data(), idLen);
     }
 
-    explicit Bound(const Item &item_) : item(item_), idLen(32) {}
+    explicit Bound(const Item &item_) : item(item_), idLen(ID_SIZE) {}
 
     bool operator==(const Bound &other) const {
         return item == other.item;
@@ -81,6 +135,154 @@ struct Bound {
 inline bool operator<(const Bound &a, const Bound &b) {
     return a.item < b.item;
 };
+
+
+struct Fingerprint {
+    uint8_t buf[FINGERPRINT_SIZE];
+
+    std::string_view sv() const {
+        return std::string_view(reinterpret_cast<const char*>(buf), sizeof(buf));
+    }
+};
+
+struct Accumulator {
+    char buf[ID_SIZE];
+
+    void setToZero() {
+        memset(buf, '\0', sizeof(buf));
+    }
+
+    void add(const Item &item) {
+        add(item.id);
+    }
+
+    void add(const Accumulator &acc) {
+        add(acc.buf);
+    }
+
+    void add(const char *otherBuf) {
+        uint64_t currCarry = 0, nextCarry = 0;
+        uint64_t *p = reinterpret_cast<uint64_t*>(buf);
+        const uint64_t *po = reinterpret_cast<const uint64_t*>(otherBuf);
+
+        auto byteswap = [](uint64_t &n) {
+            uint8_t *first = reinterpret_cast<uint8_t*>(&n);
+            uint8_t *last = first + 8;
+            std::reverse(first, last);
+        };
+
+        for (size_t i = 0; i < 4; i++) {
+            uint64_t orig = p[i];
+            uint64_t otherV = po[i];
+
+            if constexpr (std::endian::native == std::endian::big) {
+                byteswap(orig);
+                byteswap(otherV);
+            } else {
+                static_assert(std::endian::native == std::endian::little);
+            }
+
+            uint64_t next = orig;
+
+            next += currCarry;
+            if (next < orig) nextCarry = 1;
+
+            next += otherV;
+            if (next < otherV) nextCarry = 1;
+
+            if constexpr (std::endian::native == std::endian::big) {
+                byteswap(next);
+            }
+
+            p[i] = next;
+            currCarry = nextCarry;
+            nextCarry = 0;
+        }
+    }
+
+    void negate() {
+        for (size_t i = 0; i < sizeof(buf); i++) {
+            buf[i] = ~buf[i];
+        }
+
+        Accumulator zero;
+        zero.setToZero();
+        zero.buf[0] = 1;
+        add(zero.buf);
+    }
+
+    std::string_view sv() const {
+        return std::string_view(reinterpret_cast<const char*>(buf), sizeof(buf));
+    }
+
+    Fingerprint getFingerprint(uint64_t n) {
+        std::string input;
+        input += sv();
+        input += encodeVarInt(n);
+
+        unsigned char hash[SHA256_DIGEST_LENGTH];
+        SHA256(reinterpret_cast<unsigned char*>(input.data()), input.size(), hash);
+
+        Fingerprint out;
+        memcpy(out.buf, hash, FINGERPRINT_SIZE);
+
+        return out;
+    }
+};
+
+
+struct NegentropyStorageBase {
+    virtual uint64_t size() = 0;
+
+    virtual Fingerprint fingerprint(size_t begin, size_t end) = 0;
+
+    virtual void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) = 0;
+};
+
+
+
+struct NegentropyStorageVector : NegentropyStorageBase {
+    std::vector<Item> items;
+    bool sealed = false;
+
+    void addItem(uint64_t createdAt, std::string_view id) {
+        if (sealed) throw negentropy::err("already sealed");
+        if (id.size() != ID_SIZE) throw negentropy::err("bad id size for added item");
+
+        items.emplace_back(createdAt, id.substr(0, ID_SIZE));
+    }
+
+    void seal() {
+        if (sealed) throw negentropy::err("already sealed");
+        sealed = true;
+
+        std::sort(items.begin(), items.end());
+
+        for (size_t i = 1; i < items.size(); i++) {
+            if (items[i - 1] == items[i]) throw negentropy::err("duplicate item inserted");
+        }
+    }
+
+    uint64_t size() {
+        if (!sealed) throw negentropy::err("not sealed");
+        return items.size();
+    }
+
+    Fingerprint fingerprint(size_t begin, size_t end) {
+        if (begin > end || end > items.size()) throw negentropy::err("bad range");
+
+        Accumulator out;
+        out.setToZero();
+
+        for (size_t i = begin; i < end; ++i) {
+            out.add(items[i]);
+        }
+
+        return out.getFingerprint(end - begin);
+    }
+};
+
+
 
 
 struct Negentropy {
@@ -413,33 +615,6 @@ struct Negentropy {
 
     // Decoding
 
-    uint8_t getByte(std::string_view &encoded) {
-        if (encoded.size() < 1) throw negentropy::err("parse ends prematurely");
-        uint8_t output = encoded[0];
-        encoded = encoded.substr(1);
-        return output;
-    }
-
-    std::string getBytes(std::string_view &encoded, size_t n) {
-        if (encoded.size() < n) throw negentropy::err("parse ends prematurely");
-        auto res = encoded.substr(0, n);
-        encoded = encoded.substr(n);
-        return std::string(res);
-    };
-
-    uint64_t decodeVarInt(std::string_view &encoded) {
-        uint64_t res = 0;
-
-        while (1) {
-            if (encoded.size() == 0) throw negentropy::err("premature end of varint");
-            uint64_t byte = encoded[0];
-            encoded = encoded.substr(1);
-            res = (res << 7) | (byte & 0b0111'1111);
-            if ((byte & 0b1000'0000) == 0) break;
-        }
-
-        return res;
-    }
 
     uint64_t decodeTimestampIn(std::string_view &encoded, uint64_t &lastTimestampIn) {
         uint64_t timestamp = decodeVarInt(encoded);
@@ -458,25 +633,6 @@ struct Negentropy {
 
 
     // Encoding
-
-    std::string encodeVarInt(uint64_t n) {
-        if (n == 0) return std::string(1, '\0');
-
-        std::string o;
-
-        while (n) {
-            o.push_back(static_cast<unsigned char>(n & 0x7F));
-            n >>= 7;
-        }
-
-        std::reverse(o.begin(), o.end());
-
-        for (size_t i = 0; i < o.size() - 1; i++) {
-            o[i] |= 0x80;
-        }
-
-        return o;
-    }
 
     std::string encodeTimestampOut(uint64_t timestamp, uint64_t &lastTimestampOut) {
         if (timestamp == MAX_U64) {
