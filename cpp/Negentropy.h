@@ -234,9 +234,13 @@ struct Accumulator {
 struct NegentropyStorageBase {
     virtual uint64_t size() = 0;
 
-    virtual Fingerprint fingerprint(size_t begin, size_t end) = 0;
+    virtual const Item &getItem(size_t i) = 0;
 
     virtual void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) = 0;
+
+    virtual size_t upperBound(const Bound &value) = 0;
+
+    virtual Fingerprint fingerprint(size_t begin, size_t end) = 0;
 };
 
 
@@ -263,12 +267,33 @@ struct NegentropyStorageVector : NegentropyStorageBase {
         }
     }
 
-    uint64_t size() {
+    void checkSealed() {
         if (!sealed) throw negentropy::err("not sealed");
+    }
+
+    uint64_t size() {
+        checkSealed();
         return items.size();
     }
 
+    const Item &getItem(size_t i) {
+        return items.at(i);
+    }
+
+    void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) {
+        checkSealed();
+        if (begin > end || end > items.size()) throw negentropy::err("bad range");
+
+        for (auto i = begin; i < end; ++i) cb(items[i]);
+    }
+
+    size_t upperBound(const Bound &bound) {
+        checkSealed();
+        return std::upper_bound(items.begin(), items.end(), bound.item) - items.begin();
+    }
+
     Fingerprint fingerprint(size_t begin, size_t end) {
+        checkSealed();
         if (begin > end || end > items.size()) throw negentropy::err("bad range");
 
         Accumulator out;
@@ -294,10 +319,7 @@ struct Negentropy {
         std::string payload;
     };
 
-    std::vector<Item> addedItems;
-    std::vector<uint64_t> itemTimestamps;
-    std::string itemIds;
-    bool sealed = false;
+    NegentropyStorageBase *storage = nullptr;
     bool isInitiator = false;
     bool didHandshake = false;
     bool continuationNeeded = false;
@@ -307,43 +329,17 @@ struct Negentropy {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
-    void addItem(uint64_t createdAt, std::string_view id) {
-        if (sealed) throw negentropy::err("already sealed");
-        if (id.size() != ID_SIZE) throw negentropy::err("bad id size for added item");
-
-        addedItems.emplace_back(createdAt, id.substr(0, ID_SIZE));
-    }
-
-    void seal() {
-        if (sealed) throw negentropy::err("already sealed");
-        sealed = true;
-
-        std::sort(addedItems.begin(), addedItems.end());
-
-        if (addedItems.size() > 1) {
-            for (size_t i = 0; i < addedItems.size() - 1; i++) {
-                if (addedItems[i] == addedItems[i + 1]) throw negentropy::err("duplicate item inserted");
-            }
-        }
-
-        itemTimestamps.reserve(addedItems.size());
-        itemIds.reserve(addedItems.size() * ID_SIZE);
-
-        for (const auto &item : addedItems) {
-            itemTimestamps.push_back(item.timestamp);
-            itemIds += item.getId();
-        }
-
-        addedItems.clear();
-        addedItems.shrink_to_fit();
+    void setStorage(NegentropyStorageBase *storage_) {
+        if (storage) throw negentropy::err("storage already set");
+        storage = storage_;
     }
 
     std::string initiate() {
-        if (!sealed) throw negentropy::err("not sealed");
+        if (!storage) throw negentropy::err("storage not installed");
         if (didHandshake) throw negentropy::err("can't initiate after reconcile");
         isInitiator = true;
 
-        splitRange(0, numItems(), Bound(0), Bound(MAX_U64), pendingOutputs);
+        splitRange(0, storage->size(), Bound(0), Bound(MAX_U64), pendingOutputs);
 
         auto output = std::move(buildOutput(true).value());
         return output;
@@ -381,26 +377,8 @@ struct Negentropy {
     }
 
   private:
-    size_t numItems() {
-        return itemTimestamps.size();
-    }
-
-    std::string_view getItemId(size_t i) {
-        return std::string_view(itemIds.data() + (i * ID_SIZE), ID_SIZE);
-    }
-
-    Item getItem(size_t i) {
-        return Item(itemTimestamps[i], getItemId(i));
-    }
-
-    std::string computeFingerprint(size_t lower, size_t num) {
-        unsigned char hash[SHA256_DIGEST_LENGTH];
-        SHA256(reinterpret_cast<unsigned char*>(itemIds.data() + (lower * ID_SIZE)), num * ID_SIZE, hash);
-        return std::string(reinterpret_cast<char*>(hash), FINGERPRINT_SIZE);
-    }
-
     void reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
-        if (!sealed) throw negentropy::err("not sealed");
+        if (!storage) throw negentropy::err("storage not installed");
         continuationNeeded = false;
 
         Bound prevBound;
@@ -413,15 +391,15 @@ struct Negentropy {
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
-            auto upper = findUpperBound(prevIndex, numItems(), currBound);
+            auto upper = storage->upperBound(currBound);
 
             if (mode == Mode::Skip) {
                 // Do nothing
             } else if (mode == Mode::Fingerprint) {
                 auto theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
-                auto ourFingerprint = computeFingerprint(lower, upper - lower);
+                auto ourFingerprint = storage->fingerprint(lower, upper);
 
-                if (theirFingerprint != ourFingerprint) {
+                if (theirFingerprint != ourFingerprint.sv()) {
                     splitRange(lower, upper, prevBound, currBound, outputs);
                 }
             } else if (mode == Mode::IdList) {
@@ -433,8 +411,8 @@ struct Negentropy {
                     theirElems.insert(e);
                 }
 
-                for (auto i = lower; i < upper; ++i) {
-                    auto k = std::string(getItemId(i));
+                storage->iterate(lower, upper, [&](const Item &item){
+                    auto k = std::string(item.getId());
 
                     if (theirElems.find(k) == theirElems.end()) {
                         // ID exists on our side, but not their side
@@ -443,7 +421,7 @@ struct Negentropy {
                         // ID exists on both sides
                         theirElems.erase(k);
                     }
-                }
+                });
 
                 if (isInitiator) {
                     for (const auto &k : theirElems) {
@@ -463,7 +441,7 @@ struct Negentropy {
                         payload += encodeVarInt(responseHaveIds.size());
                         for (const auto &id : responseHaveIds) payload += id;
 
-                        auto nextSplitBound = it + 1 >= upper ? currBound : getMinimalBound(getItem(it), getItem(it + 1));
+                        auto nextSplitBound = it + 1 >= upper ? currBound : getMinimalBound(storage->getItem(it), storage->getItem(it + 1));
 
                         outputs.emplace_back(OutputRange({
                             didSplit ? splitBound : prevBound,
@@ -478,7 +456,7 @@ struct Negentropy {
                     };
 
                     for (; it < upper; ++it) {
-                        responseHaveIds.emplace_back(getItemId(it));
+                        responseHaveIds.emplace_back(storage->getItem(it).getId());
                         if (responseHaveIds.size() >= 100) flushIdListOutput(); // 100*32 is less than minimum frame size limit of 4k
                     }
 
@@ -509,7 +487,9 @@ struct Negentropy {
         if (numElems < buckets * 2) {
             std::string payload = encodeVarInt(uint64_t(Mode::IdList));
             payload += encodeVarInt(numElems);
-            for (auto i = lower; i < upper; i++) payload += getItemId(i);
+            storage->iterate(lower, upper, [&](const Item &item){
+                payload += item.getId();
+            });
 
             outputs.emplace_back(OutputRange({
                 lowerBound,
@@ -520,19 +500,19 @@ struct Negentropy {
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;
-            auto prevBound = Bound(getItem(curr));
+            auto prevBound = Bound(storage->getItem(curr));
 
             for (uint64_t i = 0; i < buckets; i++) {
                 auto bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
-                auto ourFingerprint = computeFingerprint(curr, bucketSize);
+                auto ourFingerprint = storage->fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
                 std::string payload = encodeVarInt(uint64_t(Mode::Fingerprint));
-                payload += ourFingerprint;
+                payload += ourFingerprint.sv();
 
                 outputs.emplace_back(OutputRange({
                     i == 0 ? lowerBound : prevBound,
-                    curr == upper ? upperBound : getMinimalBound(getItem(curr - 1), getItem(curr)),
+                    curr == upper ? upperBound : getMinimalBound(storage->getItem(curr - 1), storage->getItem(curr)),
                     std::move(payload)
                 }));
 
@@ -591,25 +571,6 @@ struct Negentropy {
         }
 
         return output;
-    }
-
-    size_t findUpperBound(size_t first, size_t last, const Bound &value) {
-        size_t count = last - first;
-
-        while (count > 0) {
-            size_t it = first;
-            size_t step = count / 2;
-            it += step;
-
-            if (value.item.timestamp == itemTimestamps[it] ? value.item.getId() < getItemId(it) : value.item.timestamp < itemTimestamps[it]) {
-                count = step;
-            } else {
-                first = ++it;
-                count -= step + 1;
-            }
-        }
-
-        return first;
     }
 
 
@@ -679,3 +640,4 @@ struct Negentropy {
 
 
 using Negentropy = negentropy::Negentropy;
+using NegentropyStorageVector = negentropy::NegentropyStorageVector;

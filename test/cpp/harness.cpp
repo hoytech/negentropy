@@ -26,6 +26,7 @@ int main() {
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
+    NegentropyStorageVector storage;
     Negentropy ne(frameSizeLimit);
 
     std::string line;
@@ -39,9 +40,10 @@ int main() {
             if (items.size() != 3) throw hoytech::error("wrong num of fields");
             uint64_t created = std::stoull(items[1]);
             auto id = hoytech::from_hex(items[2]);
-            ne.addItem(created, id);
+            storage.addItem(created, id);
         } else if (items[0] == "seal") {
-            ne.seal();
+            storage.seal();
+            ne.setStorage(&storage);
         } else if (items[0] == "initiate") {
             auto q = ne.initiate();
             if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded");
