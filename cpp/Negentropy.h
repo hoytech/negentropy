@@ -21,10 +21,10 @@
 namespace negentropy {
 
 const uint64_t PROTOCOL_VERSION_0 = 0x60;
-
-const uint64_t MAX_U64 = std::numeric_limits<uint64_t>::max();
 const size_t ID_SIZE = 32;
 const size_t FINGERPRINT_SIZE = 16;
+
+const uint64_t MAX_U64 = std::numeric_limits<uint64_t>::max();
 using err = std::runtime_error;
 
 
@@ -237,7 +237,7 @@ struct NegentropyStorageBase {
 
     virtual void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) = 0;
 
-    virtual size_t upperBound(const Bound &value) = 0;
+    virtual size_t findLowerBound(const Bound &value) = 0;
 
     virtual Fingerprint fingerprint(size_t begin, size_t end) = 0;
 };
@@ -286,9 +286,9 @@ struct NegentropyStorageVector : NegentropyStorageBase {
         for (auto i = begin; i < end; ++i) cb(items[i]);
     }
 
-    size_t upperBound(const Bound &bound) {
+    size_t findLowerBound(const Bound &bound) {
         checkSealed();
-        return std::upper_bound(items.begin(), items.end(), bound.item) - items.begin();
+        return std::lower_bound(items.begin(), items.end(), bound.item) - items.begin();
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {
@@ -311,16 +311,11 @@ struct NegentropyStorageVector : NegentropyStorageBase {
 
 struct Negentropy {
     uint64_t frameSizeLimit;
-
-    struct OutputRange {
-        Bound start;
-        Bound end;
-        std::string payload;
-    };
-
     NegentropyStorageBase *storage = nullptr;
+
     bool isInitiator = false;
     bool didHandshake = false;
+    uint64_t lastTimestampIn = 0;
     uint64_t lastTimestampOut = 0;
 
     Negentropy(uint64_t frameSizeLimit = 0) : frameSizeLimit(frameSizeLimit) {
@@ -375,14 +370,13 @@ struct Negentropy {
 
   private:
     std::string reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
-        lastTimestampOut = 0; // reset for each message
+        lastTimestampIn = lastTimestampOut = 0; // reset for each message
         std::string fullOutput;
 
         if (!storage) throw negentropy::err("storage not installed");
 
         Bound prevBound;
         size_t prevIndex = 0;
-        uint64_t lastTimestampIn = 0;
         bool skip = false;
 
         while (query.size()) {
@@ -399,7 +393,7 @@ struct Negentropy {
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
-            auto upper = storage->upperBound(currBound);
+            auto upper = storage->findLowerBound(currBound);
 
             if (mode == Mode::Skip) {
                 skip = true;
@@ -446,34 +440,23 @@ struct Negentropy {
 
                     std::string responseIds;
                     uint64_t numResponseIds = 0;
-                    auto it = lower;
-                    bool addedResp = false;
+                    Bound endBound = currBound;
 
-                    for (; it < upper; ++it) {
-                        responseIds += storage->getItem(it).getId();
-                        numResponseIds++;
-
-                        if (it + 1 < upper && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
-                            o += encodeBound(getMinimalBound(storage->getItem(it), storage->getItem(it + 1)));
-                            //o += encodeBound(Bound(storage->getItem(it)));
-                            o += encodeVarInt(uint64_t(Mode::IdList));
-
-                            o += encodeVarInt(numResponseIds);
-                            o += responseIds;
-
-                            addedResp = true;
-                            upper = it + 1; // shrink upper
+                    for (auto it = lower; it < upper; ++it) {
+                        if (it > 0 && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
+                            endBound = Bound(storage->getItem(it));
+                            upper = it; // shrink upper so that remaining range has correct fingerprint
                             break;
                         }
+
+                        responseIds += storage->getItem(it).getId();
+                        numResponseIds++;
                     }
 
-                    if (!addedResp) {
-                        o += encodeBound(currBound);
-                        o += encodeVarInt(uint64_t(Mode::IdList));
-
-                        o += encodeVarInt(numResponseIds);
-                        o += responseIds;
-                    }
+                    o += encodeBound(endBound);
+                    o += encodeVarInt(uint64_t(Mode::IdList));
+                    o += encodeVarInt(numResponseIds);
+                    o += responseIds;
 
                     fullOutput += o;
                     o.clear();
@@ -485,6 +468,7 @@ struct Negentropy {
             }
 
             if (frameSizeLimit && fullOutput.size() + o.size() > frameSizeLimit - 200) {
+                // FSL exceeded: Stop range processing and return a fingerprint for the remaining range
                 auto remainingFingerprint = storage->fingerprint(upper, storage->size());
 
                 fullOutput += encodeBound(Bound(MAX_U64));
