@@ -4,9 +4,9 @@
 
 
 
-namespace negentropy {
+namespace negentropy { namespace storage {
 
-struct NegentropyStorageVector : NegentropyStorageBase {
+struct Vector : NegentropyStorageBase {
     std::vector<Item> items;
     bool sealed = false;
 
@@ -69,4 +69,4 @@ struct NegentropyStorageVector : NegentropyStorageBase {
 };
 
 
-}
+}}

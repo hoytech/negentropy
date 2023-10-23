@@ -4,8 +4,8 @@
 #include <hoytech/error.h>
 #include <hoytech/hex.h>
 
-#include "Negentropy.h"
-#include "negentropy/storageVector.h"
+#include "negentropy.h"
+#include "negentropy/storage/vector.h"
 
 
 
@@ -27,7 +27,7 @@ int main() {
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    NegentropyStorageVector storage;
+    negentropy::storage::Vector storage;
     Negentropy ne(frameSizeLimit);
 
     std::string line;
