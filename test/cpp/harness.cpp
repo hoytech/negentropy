@@ -5,6 +5,7 @@
 #include <hoytech/hex.h>
 
 #include "Negentropy.h"
+#include "negentropy/storageVector.h"
 
 
 
