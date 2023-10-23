@@ -46,7 +46,7 @@ int main() {
             ne.setStorage(&storage);
         } else if (items[0] == "initiate") {
             auto q = ne.initiate();
-            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded");
+            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("initiate frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit);
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else if (items[0] == "msg") {
             std::string q;
@@ -69,7 +69,7 @@ int main() {
                 q = ne.reconcile(q);
             }
 
-            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded");
+            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit, ": from ", (ne.isInitiator ? "initiator" : "non-initiator"));
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else {
             throw hoytech::error("unknown cmd: ", items[0]);
