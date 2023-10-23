@@ -84,7 +84,6 @@ enum class Mode {
     Skip = 0,
     Fingerprint = 1,
     IdList = 2,
-    Continuation = 3,
     UnsupportedProtocolVersion = 4,
 };
 
@@ -322,7 +321,6 @@ struct Negentropy {
     NegentropyStorageBase *storage = nullptr;
     bool isInitiator = false;
     bool didHandshake = false;
-    bool continuationNeeded = false;
     uint64_t lastTimestampOut = 0;
 
     Negentropy(uint64_t frameSizeLimit = 0) : frameSizeLimit(frameSizeLimit) {
@@ -381,7 +379,6 @@ struct Negentropy {
         std::string fullOutput;
 
         if (!storage) throw negentropy::err("storage not installed");
-        continuationNeeded = false;
 
         Bound prevBound;
         size_t prevIndex = 0;
@@ -481,8 +478,6 @@ struct Negentropy {
                     fullOutput += o;
                     o.clear();
                 }
-            } else if (mode == Mode::Continuation) {
-                continuationNeeded = true;
             } else if (mode == Mode::UnsupportedProtocolVersion) {
                 throw negentropy::err("server does not support our negentropy protocol version");
             } else {
