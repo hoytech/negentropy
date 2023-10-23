@@ -323,7 +323,7 @@ struct Negentropy {
     bool isInitiator = false;
     bool didHandshake = false;
     bool continuationNeeded = false;
-    std::deque<OutputRange> pendingOutputs;
+    uint64_t lastTimestampOut = 0;
 
     Negentropy(uint64_t frameSizeLimit = 0) : frameSizeLimit(frameSizeLimit) {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
@@ -337,11 +337,14 @@ struct Negentropy {
     std::string initiate() {
         if (!storage) throw negentropy::err("storage not installed");
         if (didHandshake) throw negentropy::err("can't initiate after reconcile");
+        didHandshake = true;
         isInitiator = true;
 
-        splitRange(0, storage->size(), Bound(0), Bound(MAX_U64), pendingOutputs);
+        std::string output;
 
-        auto output = std::move(buildOutput(true).value());
+        output.push_back(PROTOCOL_VERSION_0); // Handshake: protocol version
+        output += splitRange(0, storage->size(), Bound(0), Bound(MAX_U64));
+
         return output;
     }
 
@@ -353,8 +356,7 @@ struct Negentropy {
             if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw negentropy::err("invalid negentropy protocol version byte");
             if (protocolVersion != PROTOCOL_VERSION_0) {
                 std::string o;
-                uint64_t lastTimestampOut = 0;
-                o += encodeBound(Bound(PROTOCOL_VERSION_0), lastTimestampOut);
+                o += encodeBound(Bound(PROTOCOL_VERSION_0));
                 o += encodeVarInt(uint64_t(Mode::UnsupportedProtocolVersion));
                 return o;
             }
@@ -362,31 +364,40 @@ struct Negentropy {
         }
 
         std::vector<std::string> haveIds, needIds;
-        reconcileAux(query, haveIds, needIds);
-
-        auto output = std::move(buildOutput(false).value());
-        return output;
+        return reconcileAux(query, haveIds, needIds);
     }
 
     std::optional<std::string> reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!isInitiator) throw negentropy::err("non-initiator asking for have/need IDs");
 
-        reconcileAux(query, haveIds, needIds);
-
-        return buildOutput(false);
+        auto output = reconcileAux(query, haveIds, needIds);
+        if (output.size()) return output;
+        return std::nullopt;
     }
 
   private:
-    void reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
+    std::string reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
+        lastTimestampOut = 0; // reset for each message
+        std::string fullOutput;
+
         if (!storage) throw negentropy::err("storage not installed");
         continuationNeeded = false;
 
         Bound prevBound;
         size_t prevIndex = 0;
         uint64_t lastTimestampIn = 0;
-        std::deque<OutputRange> outputs;
+        bool skip = false;
 
         while (query.size()) {
+            std::string o;
+
+            auto doSkip = [&]{
+                if (!skip) return;
+                skip = false;
+                o += encodeBound(prevBound);
+                o += encodeVarInt(uint64_t(Mode::Skip));
+            };
+
             auto currBound = decodeBound(query, lastTimestampIn);
             auto mode = Mode(decodeVarInt(query));
 
@@ -394,13 +405,16 @@ struct Negentropy {
             auto upper = storage->upperBound(currBound);
 
             if (mode == Mode::Skip) {
-                // Do nothing
+                skip = true;
             } else if (mode == Mode::Fingerprint) {
                 auto theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
                 auto ourFingerprint = storage->fingerprint(lower, upper);
 
                 if (theirFingerprint != ourFingerprint.sv()) {
-                    splitRange(lower, upper, prevBound, currBound, outputs);
+                    doSkip();
+                    o += splitRange(lower, upper, prevBound, currBound);
+                } else {
+                    skip = true;
                 }
             } else if (mode == Mode::IdList) {
                 auto numIds = decodeVarInt(query);
@@ -424,43 +438,48 @@ struct Negentropy {
                 });
 
                 if (isInitiator) {
+                    skip = true;
+
                     for (const auto &k : theirElems) {
                         // ID exists on their side, but not our side
                         needIds.emplace_back(k);
                     }
                 } else {
-                    std::vector<std::string> responseHaveIds;
+                    doSkip();
 
+                    std::string responseIds;
+                    uint64_t numResponseIds = 0;
                     auto it = lower;
-                    bool didSplit = false;
-                    Bound splitBound;
-
-                    auto flushIdListOutput = [&]{
-                        std::string payload = encodeVarInt(uint64_t(Mode::IdList));
-
-                        payload += encodeVarInt(responseHaveIds.size());
-                        for (const auto &id : responseHaveIds) payload += id;
-
-                        auto nextSplitBound = it + 1 >= upper ? currBound : getMinimalBound(storage->getItem(it), storage->getItem(it + 1));
-
-                        outputs.emplace_back(OutputRange({
-                            didSplit ? splitBound : prevBound,
-                            nextSplitBound,
-                            std::move(payload)
-                        }));
-
-                        splitBound = nextSplitBound;
-                        didSplit = true;
-
-                        responseHaveIds.clear();
-                    };
+                    bool addedResp = false;
 
                     for (; it < upper; ++it) {
-                        responseHaveIds.emplace_back(storage->getItem(it).getId());
-                        if (responseHaveIds.size() >= 100) flushIdListOutput(); // 100*32 is less than minimum frame size limit of 4k
+                        responseIds += storage->getItem(it).getId();
+                        numResponseIds++;
+
+                        if (it + 1 < upper && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
+                            o += encodeBound(getMinimalBound(storage->getItem(it), storage->getItem(it + 1)));
+                            //o += encodeBound(Bound(storage->getItem(it)));
+                            o += encodeVarInt(uint64_t(Mode::IdList));
+
+                            o += encodeVarInt(numResponseIds);
+                            o += responseIds;
+
+                            addedResp = true;
+                            upper = it + 1; // shrink upper
+                            break;
+                        }
                     }
 
-                    flushIdListOutput();
+                    if (!addedResp) {
+                        o += encodeBound(currBound);
+                        o += encodeVarInt(uint64_t(Mode::IdList));
+
+                        o += encodeVarInt(numResponseIds);
+                        o += responseIds;
+                    }
+
+                    fullOutput += o;
+                    o.clear();
                 }
             } else if (mode == Mode::Continuation) {
                 continuationNeeded = true;
@@ -470,32 +489,38 @@ struct Negentropy {
                 throw negentropy::err("unexpected mode");
             }
 
+            if (frameSizeLimit && fullOutput.size() + o.size() > frameSizeLimit - 200) {
+                auto remainingFingerprint = storage->fingerprint(upper, storage->size());
+
+                fullOutput += encodeBound(Bound(MAX_U64));
+                fullOutput += encodeVarInt(uint64_t(Mode::Fingerprint));
+                fullOutput += remainingFingerprint.sv();
+                break;
+            } else {
+                fullOutput += o;
+            }
+
             prevIndex = upper;
             prevBound = currBound;
         }
 
-        while (outputs.size()) {
-            pendingOutputs.emplace_front(std::move(outputs.back()));
-            outputs.pop_back();
-        }
+        return fullOutput;
     }
 
-    void splitRange(size_t lower, size_t upper, const Bound &lowerBound, const Bound &upperBound, std::deque<OutputRange> &outputs) {
+    std::string splitRange(size_t lower, size_t upper, const Bound &lowerBound, const Bound &upperBound) {
+        std::string o;
+
         uint64_t numElems = upper - lower;
         const uint64_t buckets = 16;
 
         if (numElems < buckets * 2) {
-            std::string payload = encodeVarInt(uint64_t(Mode::IdList));
-            payload += encodeVarInt(numElems);
-            storage->iterate(lower, upper, [&](const Item &item){
-                payload += item.getId();
-            });
+            o += encodeBound(upperBound);
+            o += encodeVarInt(uint64_t(Mode::IdList));
 
-            outputs.emplace_back(OutputRange({
-                lowerBound,
-                upperBound,
-                std::move(payload)
-            }));
+            o += encodeVarInt(numElems);
+            storage->iterate(lower, upper, [&](const Item &item){
+                o += item.getId();
+            });
         } else {
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
@@ -507,70 +532,17 @@ struct Negentropy {
                 auto ourFingerprint = storage->fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                std::string payload = encodeVarInt(uint64_t(Mode::Fingerprint));
-                payload += ourFingerprint.sv();
+                auto nextPrevBound = curr == upper ? upperBound : getMinimalBound(storage->getItem(curr - 1), storage->getItem(curr));
 
-                outputs.emplace_back(OutputRange({
-                    i == 0 ? lowerBound : prevBound,
-                    curr == upper ? upperBound : getMinimalBound(storage->getItem(curr - 1), storage->getItem(curr)),
-                    std::move(payload)
-                }));
+                o += encodeBound(nextPrevBound);
+                o += encodeVarInt(uint64_t(Mode::Fingerprint));
+                o += ourFingerprint.sv();
 
-                prevBound = outputs.back().end;
+                prevBound = nextPrevBound;
             }
-
-            outputs.back().end = upperBound;
-        }
-    }
-
-    std::optional<std::string> buildOutput(bool initialMessage) {
-        std::string output;
-        Bound currBound;
-        uint64_t lastTimestampOut = 0;
-
-        if (initialMessage) {
-            if (didHandshake) throw negentropy::err("already built initial message");
-            didHandshake = true;
-            output.push_back(PROTOCOL_VERSION_0);
         }
 
-        std::sort(pendingOutputs.begin(), pendingOutputs.end(), [](const auto &a, const auto &b){ return a.start < b.start; });
-
-        while (pendingOutputs.size()) {
-            std::string o;
-
-            auto &p = pendingOutputs.front();
-
-            // If bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
-            if (p.start < currBound) break;
-
-            if (currBound != p.start) {
-                o += encodeBound(p.start, lastTimestampOut);
-                o += encodeVarInt(uint64_t(Mode::Skip));
-            }
-
-            o += encodeBound(p.end, lastTimestampOut);
-            o += p.payload;
-
-            if (frameSizeLimit && output.size() + o.size() > frameSizeLimit - 5) break; // 5 leaves room for Continuation
-            output += o;
-
-            currBound = p.end;
-            pendingOutputs.pop_front();
-        }
-
-        // Server indicates that it has more to send, OR ensure client sends a non-empty message
-
-        if (!isInitiator && pendingOutputs.size()) {
-            output += encodeBound(Bound(MAX_U64), lastTimestampOut);
-            output += encodeVarInt(uint64_t(Mode::Continuation));
-        }
-
-        if (isInitiator && output.size() == 0 && !continuationNeeded) {
-            return std::nullopt;
-        }
-
-        return output;
+        return o;
     }
 
 
@@ -595,7 +567,7 @@ struct Negentropy {
 
     // Encoding
 
-    std::string encodeTimestampOut(uint64_t timestamp, uint64_t &lastTimestampOut) {
+    std::string encodeTimestampOut(uint64_t timestamp) {
         if (timestamp == MAX_U64) {
             lastTimestampOut = MAX_U64;
             return encodeVarInt(0);
@@ -607,10 +579,10 @@ struct Negentropy {
         return encodeVarInt(timestamp + 1);
     };
 
-    std::string encodeBound(const Bound &bound, uint64_t &lastTimestampOut) {
+    std::string encodeBound(const Bound &bound) {
         std::string output;
 
-        output += encodeTimestampOut(bound.item.timestamp, lastTimestampOut);
+        output += encodeTimestampOut(bound.item.timestamp);
         output += encodeVarInt(bound.idLen);
         output += bound.item.getId().substr(0, bound.idLen);
 
