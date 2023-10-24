@@ -15,7 +15,6 @@ enum class Mode {
     Skip = 0,
     Fingerprint = 1,
     IdList = 2,
-    UnsupportedProtocolVersion = 4,
 };
 
 

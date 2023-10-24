@@ -23,7 +23,7 @@
 
 namespace negentropy {
 
-const uint64_t PROTOCOL_VERSION_0 = 0x60;
+const uint64_t PROTOCOL_VERSION = 0x61; // Version 1
 
 const uint64_t MAX_U64 = std::numeric_limits<uint64_t>::max();
 using err = std::runtime_error;
@@ -35,7 +35,7 @@ struct Negentropy {
     NegentropyStorageBase *storage = nullptr;
 
     bool isInitiator = false;
-    bool didHandshake = false;
+
     uint64_t lastTimestampIn = 0;
     uint64_t lastTimestampOut = 0;
 
@@ -50,13 +50,12 @@ struct Negentropy {
 
     std::string initiate() {
         if (!storage) throw negentropy::err("storage not installed");
-        if (didHandshake) throw negentropy::err("can't initiate after reconcile");
-        didHandshake = true;
+        if (isInitiator) throw negentropy::err("already initiated");
         isInitiator = true;
 
         std::string output;
+        output.push_back(PROTOCOL_VERSION);
 
-        output.push_back(PROTOCOL_VERSION_0); // Handshake: protocol version
         output += splitRange(0, storage->size(), Bound(0), Bound(MAX_U64));
 
         return output;
@@ -65,34 +64,32 @@ struct Negentropy {
     std::string reconcile(std::string_view query) {
         if (isInitiator) throw negentropy::err("initiator not asking for have/need IDs");
 
-        if (!didHandshake) {
-            auto protocolVersion = getByte(query);
-            if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw negentropy::err("invalid negentropy protocol version byte");
-            if (protocolVersion != PROTOCOL_VERSION_0) {
-                std::string o;
-                o += encodeBound(Bound(PROTOCOL_VERSION_0));
-                o += encodeVarInt(uint64_t(Mode::UnsupportedProtocolVersion));
-                return o;
-            }
-            didHandshake = true;
-        }
-
         std::vector<std::string> haveIds, needIds;
         return reconcileAux(query, haveIds, needIds);
     }
 
-    std::string reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
+    std::optional<std::string> reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!isInitiator) throw negentropy::err("non-initiator asking for have/need IDs");
 
-        return reconcileAux(query, haveIds, needIds);
+        auto output = reconcileAux(query, haveIds, needIds);
+        if (output.size() == 1) return std::nullopt;
+        return output;
     }
 
   private:
     std::string reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
-        lastTimestampIn = lastTimestampOut = 0; // reset for each message
-        std::string fullOutput;
-
         if (!storage) throw negentropy::err("storage not installed");
+        lastTimestampIn = lastTimestampOut = 0; // reset for each message
+
+        std::string fullOutput;
+        fullOutput.push_back(PROTOCOL_VERSION);
+
+        auto protocolVersion = getByte(query);
+        if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw negentropy::err("invalid negentropy protocol version byte");
+        if (protocolVersion != PROTOCOL_VERSION) {
+            if (isInitiator) throw negentropy::err(std::string("unsupported negentropy protocol version requested") + std::to_string(protocolVersion - 0x60));
+            else return fullOutput;
+        }
 
         Bound prevBound;
         size_t prevIndex = 0;
@@ -183,8 +180,6 @@ struct Negentropy {
                     fullOutput += o;
                     o.clear();
                 }
-            } else if (mode == Mode::UnsupportedProtocolVersion) {
-                throw negentropy::err("server does not support our negentropy protocol version");
             } else {
                 throw negentropy::err("unexpected mode");
             }
