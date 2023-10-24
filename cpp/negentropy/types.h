@@ -168,7 +168,7 @@ struct NegentropyStorageBase {
 
     virtual const Item &getItem(size_t i) = 0;
 
-    virtual void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) = 0;
+    virtual void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t i)> cb) = 0;
 
     virtual size_t findLowerBound(const Bound &value) = 0;
 

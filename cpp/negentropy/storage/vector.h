@@ -41,11 +41,13 @@ struct Vector : NegentropyStorageBase {
         return items.at(i);
     }
 
-    void iterate(size_t begin, size_t end, std::function<void(const Item &)> cb) {
+    void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
         checkSealed();
         if (begin > end || end > items.size()) throw negentropy::err("bad range");
 
-        for (auto i = begin; i < end; ++i) cb(items[i]);
+        for (auto i = begin; i < end; ++i) {
+            if (!cb(items[i], i)) break;
+        }
     }
 
     size_t findLowerBound(const Bound &bound) {

@@ -60,12 +60,12 @@ int main() {
                 for (auto &id : have) std::cout << "have," << hoytech::to_hex(id) << "\n";
                 for (auto &id : need) std::cout << "need," << hoytech::to_hex(id) << "\n";
 
-                if (!resp) {
+                if (!resp.size()) {
                     std::cout << "done" << std::endl;
                     continue;
                 }
 
-                q = *resp;
+                q = resp;
             } else {
                 q = ne.reconcile(q);
             }

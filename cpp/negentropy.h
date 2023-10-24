@@ -81,12 +81,10 @@ struct Negentropy {
         return reconcileAux(query, haveIds, needIds);
     }
 
-    std::optional<std::string> reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
+    std::string reconcile(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         if (!isInitiator) throw negentropy::err("non-initiator asking for have/need IDs");
 
-        auto output = reconcileAux(query, haveIds, needIds);
-        if (output.size()) return output;
-        return std::nullopt;
+        return reconcileAux(query, haveIds, needIds);
     }
 
   private:
@@ -137,7 +135,7 @@ struct Negentropy {
                     theirElems.insert(e);
                 }
 
-                storage->iterate(lower, upper, [&](const Item &item){
+                storage->iterate(lower, upper, [&](const Item &item, size_t){
                     auto k = std::string(item.getId());
 
                     if (theirElems.find(k) == theirElems.end()) {
@@ -147,6 +145,8 @@ struct Negentropy {
                         // ID exists on both sides
                         theirElems.erase(k);
                     }
+
+                    return true;
                 });
 
                 if (isInitiator) {
@@ -163,16 +163,17 @@ struct Negentropy {
                     uint64_t numResponseIds = 0;
                     Bound endBound = currBound;
 
-                    for (auto it = lower; it < upper; ++it) {
-                        if (it > 0 && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
-                            endBound = Bound(storage->getItem(it));
+                    storage->iterate(lower, upper, [&](const Item &item, size_t it){
+                        if (fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
+                            endBound = Bound(item);
                             upper = it; // shrink upper so that remaining range has correct fingerprint
-                            break;
+                            return false;
                         }
 
-                        responseIds += storage->getItem(it).getId();
+                        responseIds += item.getId();
                         numResponseIds++;
-                    }
+                        return true;
+                    });
 
                     o += encodeBound(endBound);
                     o += encodeVarInt(uint64_t(Mode::IdList));
@@ -218,8 +219,9 @@ struct Negentropy {
             o += encodeVarInt(uint64_t(Mode::IdList));
 
             o += encodeVarInt(numElems);
-            storage->iterate(lower, upper, [&](const Item &item){
+            storage->iterate(lower, upper, [&](const Item &item, size_t){
                 o += item.getId();
+                return true;
             });
         } else {
             uint64_t itemsPerBucket = numElems / buckets;
