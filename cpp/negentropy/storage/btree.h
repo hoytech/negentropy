@@ -129,30 +129,37 @@ struct BTree /*: StorageBase*/ {
             throw err("diving not impl");
         }
 
-        if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
+        {
             const LeafNode &oldLeaf = *currNode.leaf();
-            LeafNode newLeaf = oldLeaf;
 
-            size_t j = 0;
-            for (size_t i = 0; i < oldLeaf.numItems; i++) {
-                if (item < oldLeaf.items[i]) {
-                    newLeaf.items[j++] = item;
-                } else if (oldLeaf.items[i] == item) {
-                    throw err("already exists");
+            if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
+                // Happy path: Leaf has room for new item
+
+                LeafNode newLeaf = oldLeaf;
+
+                size_t j = 0;
+                for (size_t i = 0; i < oldLeaf.numItems; i++) {
+                    if (item < oldLeaf.items[i]) {
+                        newLeaf.items[j++] = item;
+                    } else if (oldLeaf.items[i] == item) {
+                        throw err("already exists");
+                    }
+
+                    newLeaf.items[j++] = oldLeaf.items[i];
                 }
 
-                newLeaf.items[j++] = oldLeaf.items[i];
+                if (j == oldLeaf.numItems) newLeaf.items[j++] = item;
+
+                newLeaf.numItems++;
+                newLeaf.accum.add(item.id);
+
+                saveNode(NodePtr{&newLeaf}, currNodeId);
+            } else {
+                // Leaf is full: Split it into 2
+
+                LeafNode newLeaf1;
+                LeafNode newLeaf2;
             }
-
-            if (j == oldLeaf.numItems) newLeaf.items[j++] = item;
-
-            newLeaf.numItems++;
-            newLeaf.accum.add(item.id);
-
-            saveNode(NodePtr{&newLeaf}, currNodeId);
-        } else {
-            // split
-            throw err("split not impl");
         }
     }
 
