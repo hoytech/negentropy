@@ -22,7 +22,7 @@ enum class Mode {
 
 struct Item {
     uint64_t timestamp;
-    char id[ID_SIZE];
+    uint8_t id[ID_SIZE];
 
     explicit Item(uint64_t timestamp = 0) : timestamp(timestamp) {
         memset(id, '\0', sizeof(id));
@@ -34,7 +34,7 @@ struct Item {
     }
 
     std::string_view getId() const {
-        return std::string_view(id, sizeof(id));
+        return std::string_view(reinterpret_cast<const char*>(id), sizeof(id));
     }
 
     bool operator==(const Item &other) const {
@@ -77,7 +77,7 @@ struct Fingerprint {
 };
 
 struct Accumulator {
-    char buf[ID_SIZE];
+    uint8_t buf[ID_SIZE];
 
     void setToZero() {
         memset(buf, '\0', sizeof(buf));
@@ -91,7 +91,7 @@ struct Accumulator {
         add(acc.buf);
     }
 
-    void add(const char *otherBuf) {
+    void add(const uint8_t *otherBuf) {
         uint64_t currCarry = 0, nextCarry = 0;
         uint64_t *p = reinterpret_cast<uint64_t*>(buf);
         const uint64_t *po = reinterpret_cast<const uint64_t*>(otherBuf);
