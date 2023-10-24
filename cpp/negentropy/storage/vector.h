@@ -6,7 +6,8 @@
 
 namespace negentropy { namespace storage {
 
-struct Vector : NegentropyStorageBase {
+
+struct Vector : StorageBase {
     std::vector<Item> items;
     bool sealed = false;
 
@@ -38,6 +39,7 @@ struct Vector : NegentropyStorageBase {
     }
 
     const Item &getItem(size_t i) {
+        checkSealed();
         return items.at(i);
     }
 

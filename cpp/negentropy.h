@@ -19,6 +19,7 @@
 
 #include "negentropy/encoding.h"
 #include "negentropy/types.h"
+#include "negentropy/storage/base.h"
 
 
 namespace negentropy {
@@ -32,7 +33,7 @@ using err = std::runtime_error;
 
 struct Negentropy {
     uint64_t frameSizeLimit;
-    NegentropyStorageBase *storage = nullptr;
+    StorageBase *storage = nullptr;
 
     bool isInitiator = false;
 
@@ -43,7 +44,7 @@ struct Negentropy {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
-    void setStorage(NegentropyStorageBase *storage_) {
+    void setStorage(StorageBase *storage_) {
         if (storage) throw negentropy::err("storage already set");
         storage = storage_;
     }
