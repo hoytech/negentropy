@@ -32,32 +32,26 @@ using err = std::runtime_error;
 
 
 struct Negentropy {
+    StorageBase &storage;
     uint64_t frameSizeLimit;
-    StorageBase *storage = nullptr;
 
     bool isInitiator = false;
 
     uint64_t lastTimestampIn = 0;
     uint64_t lastTimestampOut = 0;
 
-    Negentropy(uint64_t frameSizeLimit = 0) : frameSizeLimit(frameSizeLimit) {
+    Negentropy(StorageBase &storage, uint64_t frameSizeLimit = 0) : storage(storage), frameSizeLimit(frameSizeLimit) {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
-    void setStorage(StorageBase *storage_) {
-        if (storage) throw negentropy::err("storage already set");
-        storage = storage_;
-    }
-
     std::string initiate() {
-        if (!storage) throw negentropy::err("storage not installed");
         if (isInitiator) throw negentropy::err("already initiated");
         isInitiator = true;
 
         std::string output;
         output.push_back(PROTOCOL_VERSION);
 
-        output += splitRange(0, storage->size(), Bound(0), Bound(MAX_U64));
+        output += splitRange(0, storage.size(), Bound(0), Bound(MAX_U64));
 
         return output;
     }
@@ -79,7 +73,6 @@ struct Negentropy {
 
   private:
     std::string reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
-        if (!storage) throw negentropy::err("storage not installed");
         lastTimestampIn = lastTimestampOut = 0; // reset for each message
 
         std::string fullOutput;
@@ -100,23 +93,24 @@ struct Negentropy {
             std::string o;
 
             auto doSkip = [&]{
-                if (!skip) return;
-                skip = false;
-                o += encodeBound(prevBound);
-                o += encodeVarInt(uint64_t(Mode::Skip));
+                if (skip) {
+                    skip = false;
+                    o += encodeBound(prevBound);
+                    o += encodeVarInt(uint64_t(Mode::Skip));
+                }
             };
 
             auto currBound = decodeBound(query, lastTimestampIn);
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
-            auto upper = storage->findLowerBound(currBound);
+            auto upper = storage.findLowerBound(currBound);
 
             if (mode == Mode::Skip) {
                 skip = true;
             } else if (mode == Mode::Fingerprint) {
                 auto theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
-                auto ourFingerprint = storage->fingerprint(lower, upper);
+                auto ourFingerprint = storage.fingerprint(lower, upper);
 
                 if (theirFingerprint != ourFingerprint.sv()) {
                     doSkip();
@@ -133,7 +127,7 @@ struct Negentropy {
                     theirElems.insert(e);
                 }
 
-                storage->iterate(lower, upper, [&](const Item &item, size_t){
+                storage.iterate(lower, upper, [&](const Item &item, size_t){
                     auto k = std::string(item.getId());
 
                     if (theirElems.find(k) == theirElems.end()) {
@@ -161,10 +155,10 @@ struct Negentropy {
                     uint64_t numResponseIds = 0;
                     Bound endBound = currBound;
 
-                    storage->iterate(lower, upper, [&](const Item &item, size_t it){
+                    storage.iterate(lower, upper, [&](const Item &item, size_t index){
                         if (fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
                             endBound = Bound(item);
-                            upper = it; // shrink upper so that remaining range has correct fingerprint
+                            upper = index; // shrink upper so that remaining range gets correct fingerprint
                             return false;
                         }
 
@@ -186,8 +180,8 @@ struct Negentropy {
             }
 
             if (frameSizeLimit && fullOutput.size() + o.size() > frameSizeLimit - 200) {
-                // FSL exceeded: Stop range processing and return a fingerprint for the remaining range
-                auto remainingFingerprint = storage->fingerprint(upper, storage->size());
+                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
+                auto remainingFingerprint = storage.fingerprint(upper, storage.size());
 
                 fullOutput += encodeBound(Bound(MAX_U64));
                 fullOutput += encodeVarInt(uint64_t(Mode::Fingerprint));
@@ -215,7 +209,7 @@ struct Negentropy {
             o += encodeVarInt(uint64_t(Mode::IdList));
 
             o += encodeVarInt(numElems);
-            storage->iterate(lower, upper, [&](const Item &item, size_t){
+            storage.iterate(lower, upper, [&](const Item &item, size_t){
                 o += item.getId();
                 return true;
             });
@@ -223,14 +217,14 @@ struct Negentropy {
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;
-            auto prevBound = Bound(storage->getItem(curr));
+            auto prevBound = Bound(storage.getItem(curr));
 
             for (uint64_t i = 0; i < buckets; i++) {
                 auto bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
-                auto ourFingerprint = storage->fingerprint(curr, curr + bucketSize);
+                auto ourFingerprint = storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                auto nextPrevBound = curr == upper ? upperBound : getMinimalBound(storage->getItem(curr - 1), storage->getItem(curr));
+                auto nextPrevBound = curr == upper ? upperBound : getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr));
 
                 o += encodeBound(nextPrevBound);
                 o += encodeVarInt(uint64_t(Mode::Fingerprint));

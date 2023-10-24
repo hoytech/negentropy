@@ -1,5 +1,6 @@
 #include <iostream>
 #include <sstream>
+#include <memory>
 
 #include <hoytech/error.h>
 #include <hoytech/hex.h>
@@ -28,7 +29,7 @@ int main() {
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
     negentropy::storage::Vector storage;
-    Negentropy ne(frameSizeLimit);
+    std::unique_ptr<Negentropy> ne;
 
     std::string line;
     while (std::cin) {
@@ -44,18 +45,18 @@ int main() {
             storage.addItem(created, id);
         } else if (items[0] == "seal") {
             storage.seal();
-            ne.setStorage(&storage);
+            ne = std::make_unique<Negentropy>(storage, frameSizeLimit);
         } else if (items[0] == "initiate") {
-            auto q = ne.initiate();
+            auto q = ne->initiate();
             if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("initiate frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit);
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else if (items[0] == "msg") {
             std::string q;
             if (items.size() >= 2) q = hoytech::from_hex(items[1]);
 
-            if (ne.isInitiator) {
+            if (ne->isInitiator) {
                 std::vector<std::string> have, need;
-                auto resp = ne.reconcile(q, have, need);
+                auto resp = ne->reconcile(q, have, need);
 
                 for (auto &id : have) std::cout << "have," << hoytech::to_hex(id) << "\n";
                 for (auto &id : need) std::cout << "need," << hoytech::to_hex(id) << "\n";
@@ -67,10 +68,10 @@ int main() {
 
                 q = *resp;
             } else {
-                q = ne.reconcile(q);
+                q = ne->reconcile(q);
             }
 
-            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit, ": from ", (ne.isInitiator ? "initiator" : "non-initiator"));
+            if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit, ": from ", (ne->isInitiator ? "initiator" : "non-initiator"));
             std::cout << "msg," << hoytech::to_hex(q) << std::endl;
         } else {
             throw hoytech::error("unknown cmd: ", items[0]);
