@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <openssl/sha.h>
+
 
 namespace negentropy {
 

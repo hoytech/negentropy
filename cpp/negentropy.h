@@ -15,8 +15,6 @@
 #include <optional>
 #include <bit>
 
-#include <openssl/sha.h>
-
 #include "negentropy/encoding.h"
 #include "negentropy/types.h"
 #include "negentropy/storage/base.h"
