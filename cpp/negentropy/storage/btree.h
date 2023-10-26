@@ -9,8 +9,10 @@ namespace negentropy { namespace storage {
 
 using err = std::runtime_error;
 
-const size_t MAX_ITEMS_PER_LEAF_NODE = 64;
-const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 32;
+//const size_t MAX_ITEMS_PER_LEAF_NODE = 64;
+//const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 32;
+const size_t MAX_ITEMS_PER_LEAF_NODE = 4;
+const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 3;
 
 // Node types: 1=Leaf, 2=Interior
 
@@ -29,6 +31,15 @@ struct LeafNode {
     }
 };
 
+struct ChildSplitter {
+    Item splitKey; // max item in child
+    uint64_t childNodeId;
+};
+
+inline bool operator<(const ChildSplitter &a, const ChildSplitter &b) {
+    return a.splitKey < b.splitKey;
+};
+
 struct InteriorNode {
     uint32_t type;
     uint32_t numChildren;
@@ -36,24 +47,17 @@ struct InteriorNode {
     Accumulator accum;
     uint64_t numItems;
 
-    uint64_t children[MAX_CHILDREN_PER_INTERIOR_NODE];
-    Item keys[MAX_CHILDREN_PER_INTERIOR_NODE - 1];
+    ChildSplitter children[MAX_CHILDREN_PER_INTERIOR_NODE];
 
     InteriorNode() {
         memset((void*)this, '\0', sizeof(*this));
         type = 2;
     }
-
-    /*
-    size_t findChild(const Item &item) {
-        auto endOfKeys = keys + size_t(numChildren - 1);
-        auto lower = std::lower_bound(keys, endOfKeys, item);
-    }
-    */
 };
 
 struct NodePtr {
-    const void *p;
+    void *p;
+    uint64_t nodeId;
 
     bool exists() {
         return p != nullptr;
@@ -64,107 +68,164 @@ struct NodePtr {
     }
 
     LeafNode *leaf() {
+        if (!isLeaf()) throw err("not a leaf node");
         return (LeafNode *)p;
     }
 
     InteriorNode *interior() {
+        if (isLeaf()) throw err("not an interior node");
         return (InteriorNode *)p;
+    }
+
+    Item maxKey() {
+        if (isLeaf()) {
+            auto *p = leaf();
+            return p->items[p->numItems - 1];
+        } else {
+            auto *p = interior();
+            return p->children[p->numChildren].splitKey;
+        }
     }
 };
 
 
 struct BTree /*: StorageBase*/ {
-    std::unordered_map<uint64_t, void*> nodeStorageMap;
-    uint64_t nextNodeId = 2;
+    //// Node Storage
 
-    NodePtr getNode(uint64_t nodeId) {
-        auto res = nodeStorageMap.find(nodeId);
-        if (res == nodeStorageMap.end()) return NodePtr{nullptr};
-        return NodePtr{res->second};
+    std::unordered_map<uint64_t, void*> _nodeStorageMap;
+    uint64_t _rootNodeId = 0; // 0 means no root
+    uint64_t _nextNodeId = 1;
+
+    NodePtr getNodeRead(uint64_t nodeId) {
+        auto res = _nodeStorageMap.find(nodeId);
+        if (res == _nodeStorageMap.end()) return NodePtr{nullptr, 0};
+        return NodePtr{res->second, nodeId};
     }
 
-    uint64_t saveNode(NodePtr node, uint64_t nodeId = 0) {
-        void *m;
-
-        if (node.isLeaf()) {
-            m = new LeafNode;
-            memcpy(m, node.p, sizeof(LeafNode));
-        } else {
-            m = new InteriorNode;
-            memcpy(m, node.p, sizeof(InteriorNode));
-        }
-
-        if (nodeId == 0) nodeId = nextNodeId++;
-
-        {
-            auto prev = getNode(nodeId);
-
-            if (prev.exists()) {
-                if (prev.isLeaf()) delete prev.leaf();
-                else delete prev.interior();
-            }
-        }
-
-        nodeStorageMap[nodeId] = m;
-
-        return nodeId;
+    NodePtr getNodeWrite(uint64_t nodeId) {
+        return getNodeRead(nodeId);
     }
 
-    void insert(const Item &item) {
-        auto currNodeId = 1;
-        auto currNode = getNode(currNodeId);
+    NodePtr makeNewLeaf() {
+        uint64_t nodeId = _nextNodeId++;
+        void *m = new LeafNode;
+        _nodeStorageMap[nodeId] = m;
+        return NodePtr{m, nodeId};
+    }
 
-        if (!currNode.exists()) {
-            LeafNode newLeaf;
+    NodePtr makeNewInterior() {
+        uint64_t nodeId = _nextNodeId++;
+        void *m = new InteriorNode;
+        _nodeStorageMap[nodeId] = m;
+        return NodePtr{m, nodeId};
+    }
 
-            newLeaf.items[0] = item;
+    void deleteNode(uint64_t nodeId) {
+        auto prev = getNodeRead(nodeId);
+
+        if (prev.exists()) {
+            if (prev.isLeaf()) delete prev.leaf();
+            else delete prev.interior();
+        }
+    }
+
+    uint64_t getRootNodeId() {
+        return _rootNodeId;
+    }
+
+    void setRootNodeId(uint64_t newRootNodeId) {
+        _rootNodeId = newRootNodeId;
+    }
+
+
+    //// Insertion
+
+    void insert(const Item &newItem) {
+        // Make root leaf in case it doesn't exist
+
+        auto rootNodeId = getRootNodeId();
+
+        if (!rootNodeId) {
+            auto newLeafPtr = makeNewLeaf();
+            auto &newLeaf = *newLeafPtr.leaf();
+
+            newLeaf.items[0] = newItem;
             newLeaf.numItems++;
-            newLeaf.accum.add(item.id);
+            newLeaf.accum.add(newItem.id);
 
-            saveNode(NodePtr{&newLeaf}, currNodeId);
+            setRootNodeId(newLeafPtr.nodeId);
             return;
         }
+
+        // Traverse interior nodes until we find a leaf
+
+        struct Breadcrumb {
+            size_t index;
+            NodePtr node;
+        };
+
+        std::vector<Breadcrumb> breadcrumbs;
+        auto currNode = getNodeRead(rootNodeId);
 
         while (!currNode.isLeaf()) {
             throw err("diving not impl");
         }
 
-        {
-            const LeafNode &oldLeaf = *currNode.leaf();
+        // Update leaf node
 
-            if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
-                // Happy path: Leaf has room for new item
+        std::optional<NodePtr> newNode;
 
-                LeafNode newLeaf = oldLeaf;
+        if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
+            // Happy path: Leaf has room for new item
 
-                size_t j = 0;
-                for (size_t i = 0; i < oldLeaf.numItems; i++) {
-                    if (item < oldLeaf.items[i]) {
-                        newLeaf.items[j++] = item;
-                    } else if (oldLeaf.items[i] == item) {
-                        throw err("already exists");
-                    }
+            auto &leaf = *getNodeWrite(currNode.nodeId).leaf();
 
-                    newLeaf.items[j++] = oldLeaf.items[i];
-                }
+            leaf.items[leaf.numItems] = newItem;
+            std::inplace_merge(leaf.items, leaf.items + leaf.numItems, leaf.items + leaf.numItems + 1);
 
-                if (j == oldLeaf.numItems) newLeaf.items[j++] = item;
+            leaf.numItems++;
+            leaf.accum.add(newItem.id);
+        } else {
+            // Leaf is full: Split it into 2
 
-                newLeaf.numItems++;
-                newLeaf.accum.add(item.id);
+            auto &left = *getNodeWrite(currNode.nodeId).leaf();
+            auto rightPtr = makeNewLeaf();
+            newNode = rightPtr;
+            auto &right = *rightPtr.leaf();
 
-                saveNode(NodePtr{&newLeaf}, currNodeId);
-            } else {
-                // Leaf is full: Split it into 2
+            Item tmpItems[MAX_ITEMS_PER_LEAF_NODE + 1];
+            for (size_t i = 0; i < MAX_ITEMS_PER_LEAF_NODE; i++) tmpItems[i] = left.items[i];
+            tmpItems[MAX_ITEMS_PER_LEAF_NODE] = newItem;
+            std::inplace_merge(tmpItems, tmpItems + MAX_ITEMS_PER_LEAF_NODE, tmpItems + MAX_ITEMS_PER_LEAF_NODE + 1);
 
-                LeafNode newLeaf1;
-                LeafNode newLeaf2;
+            left.accum.setToZero();
+            left.numItems = (MAX_ITEMS_PER_LEAF_NODE / 2) + 1;
+            right.numItems = MAX_ITEMS_PER_LEAF_NODE / 2;
+
+            for (size_t i = 0; i < left.numItems; i++) {
+                left.items[i] = tmpItems[i];
+                left.accum.add(left.items[i]);
             }
+
+            for (size_t i = 0; i < right.numItems; i++) {
+                right.items[i] = tmpItems[left.numItems + i];
+                right.accum.add(right.items[i]);
+            }
+
+            right.nextLeaf = left.nextLeaf;
+            left.nextLeaf = rightPtr.nodeId;
+        }
+
+        // Merge upwards
+
+        if (newNode && breadcrumbs.size() == 0) {
+            auto newInterior = makeNewInterior();
+            newInterior.numChildren = 2;
         }
     }
 
     void walk(uint64_t nodeId = 1, int depth = 0) {
-        auto currNode = getNode(nodeId);
+        auto currNode = getNodeRead(nodeId);
         std::string indent(depth * 4, ' ');
 
         if (currNode.isLeaf()) {

@@ -46,6 +46,10 @@ inline bool operator<(const Item &a, const Item &b) {
     return a.timestamp != b.timestamp ? a.timestamp < b.timestamp : a.getId() < b.getId();
 };
 
+inline bool operator<=(const Item &a, const Item &b) {
+    return a.timestamp != b.timestamp ? a.timestamp <= b.timestamp : a.getId() <= b.getId();
+};
+
 
 struct Bound {
     Item item;
