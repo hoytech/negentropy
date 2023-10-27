@@ -321,7 +321,7 @@ struct BTree : StorageBase {
         Node &node = nodePtr.get();
 
         for (size_t i = 1; i < node.numItems; i++) {
-            if (value.item < node.items[i].item) {
+            if (value.item <= node.items[i].item) {
                 return findLowerBoundAux(value, getNodeRead(node.items[i - 1].nodeId), numToLeft);
             } else {
                 if (node.items[i - 1].nodeId) numToLeft += getNodeRead(node.items[i - 1].nodeId).get().accumCount;
