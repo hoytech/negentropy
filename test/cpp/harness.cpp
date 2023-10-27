@@ -6,7 +6,7 @@
 #include <hoytech/hex.h>
 
 #include "negentropy.h"
-#include "negentropy/storage/vector.h"
+#include "negentropy/storage/btree.h"
 
 
 
@@ -28,7 +28,7 @@ int main() {
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    negentropy::storage::Vector storage;
+    negentropy::storage::BTree storage;
     std::unique_ptr<Negentropy> ne;
 
     std::string line;

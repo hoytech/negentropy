@@ -228,6 +228,15 @@ struct BTree : StorageBase {
         }
     }
 
+    // These 2 methods are for compat with the vector interface
+
+    void addItem(uint64_t createdAt, std::string_view id) {
+        insert(Item(createdAt, id));
+    }
+
+    void seal() {
+    }
+
 
     //// Utils
 
