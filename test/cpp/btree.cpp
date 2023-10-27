@@ -49,8 +49,6 @@ int main() {
 
 
 
-
-/*
     std::cout << "-----------------" << std::endl;
     std::cout << "SIZE = " << btree.size() << std::endl;
 
@@ -58,10 +56,11 @@ int main() {
         std::cout << "GI = " << btree.getItem(i).timestamp << std::endl;
     }
 
-    btree.iterate(0, 20, [&](const auto &item, size_t i) {
+    btree.iterate(5, 8, [&](const auto &item, size_t i) {
         std::cout << "II = " << item.timestamp << " (" << i << ")" << std::endl;
-        return i < 14;
+        return true;
     });
+/*
     */
 
     return 0;

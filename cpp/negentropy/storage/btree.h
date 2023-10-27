@@ -254,28 +254,59 @@ struct BTree /*: StorageBase*/ {
     }
 
 
-    const Item &getItem(size_t index) {
+    void traverseToOffset(size_t index, const std::function<void(Node &node, size_t index)> &cb) {
         auto rootNodeId = getRootNodeId();
         auto &rootNode = getNodeRead(rootNodeId).get();
-
         if (index >= rootNode.accumCount) throw err("out of range");
-
-        return getItemAux(index, rootNode);
+        return traverseToOffsetAux(index, rootNode, cb);
     }
 
-    const Item &getItemAux(size_t index, Node &node) {
-        if (node.numItems == node.accumCount) return node.items[index].item;
+    void traverseToOffsetAux(size_t index, Node &node, const std::function<void(Node &node, size_t index)> &cb) {
+        if (node.numItems == node.accumCount) {
+            cb(node, index);
+            return;
+        }
 
         for (size_t i = 0; i < node.numItems; i++) {
             auto &child = getNodeRead(node.items[i].nodeId).get();
-            if (index < child.accumCount) return getItemAux(index, child);
+            if (index < child.accumCount) return traverseToOffsetAux(index, child, cb);
             index -= child.accumCount;
         }
 
         __builtin_unreachable();
     }
 
+    const Item &getItem(size_t index) {
+        Item *out;
+        traverseToOffset(index, [&](Node &node, size_t index){
+            out = &node.items[index].item;
+        });
+        return *out;
+    }
 
+    void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
+        auto rootNodeId = getRootNodeId();
+        auto &rootNode = getNodeRead(rootNodeId).get();
+
+        if (begin > end) throw err("begin > end");
+        if (end > rootNode.accumCount) throw err("out of range");
+
+        size_t num = end - begin;
+
+        traverseToOffset(begin, [&](Node &node, size_t index){
+            Node *currNode = &node;
+            for (size_t i = 0; i < num; i++) {
+                if (!cb(currNode->items[index].item, begin + i)) return;
+                index++;
+                if (index >= currNode->numItems) {
+                    currNode = getNodeRead(currNode->nextLeaf).p;
+                    index = 0;
+                }
+            }
+        });
+    }
+
+/*
     void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
         auto rootNodeId = getRootNodeId();
         auto &rootNode = getNodeRead(rootNodeId).get();
@@ -311,6 +342,7 @@ struct BTree /*: StorageBase*/ {
 
         __builtin_unreachable();
     }
+    */
 
 
 
