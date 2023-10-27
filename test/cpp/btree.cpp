@@ -9,6 +9,7 @@
 
 #include "negentropy.h"
 #include "negentropy/storage/btree.h"
+#include "negentropy/storage/btree/debug.h"
 #include "negentropy/storage/vector.h"
 
 
@@ -21,13 +22,11 @@ int main() {
     //std::cout << "SIZEOF INTERIOR: " << sizeof(negentropy::storage::InteriorNode) << std::endl;
 
     negentropy::storage::BTree btree;
-    negentropy::storage::Vector vec;
 
     auto add = [&](uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, '\x01'));
         btree.insert(item);
-        btree.verify();
-        vec.addItem(item.timestamp, item.getId());
+        negentropy::storage::btree::verify(btree);
     };
 
     for (size_t i = 100; i < 114; i++) add(i * 10);
@@ -42,17 +41,11 @@ int main() {
     add(88);
     add(87);
 
-    vec.seal();
 
-
-    std::cout << "BT: " << hoytech::to_hex(btree.fingerprint(4, 17).sv()) << std::endl;
-    std::cout << "VC: " << hoytech::to_hex(vec.fingerprint(4, 17).sv()) << std::endl;
+    negentropy::storage::btree::dump(btree);
 
 
 /*
-    btree.walk();
-    btree.verify();
-
     //srand(0);
     //for (int i = 0; i < 1000; i++) add(rand());
     */
