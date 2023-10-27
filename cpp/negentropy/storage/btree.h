@@ -49,7 +49,7 @@ struct NodePtr {
 };
 
 
-struct BTree /*: StorageBase*/ {
+struct BTree : StorageBase {
     //// Node Storage
 
     std::unordered_map<uint64_t, Node> _nodeStorageMap;
@@ -245,8 +245,10 @@ struct BTree /*: StorageBase*/ {
     }
 
     void traverseToOffset(size_t index, const std::function<void(Node &node, size_t index)> &cb, std::function<void(Node &)> customAccum = nullptr) {
-        auto rootNodeId = getRootNodeId();
-        auto &rootNode = getNodeRead(rootNodeId).get();
+        auto rootNodePtr = getNodeRead(getRootNodeId());
+        if (!rootNodePtr.exists()) return;
+        auto &rootNode = rootNodePtr.get();
+
         if (index > rootNode.accumCount) throw err("out of range");
         return traverseToOffsetAux(index, rootNode, cb, customAccum);
     }
@@ -270,12 +272,15 @@ struct BTree /*: StorageBase*/ {
     //// Interface
 
     uint64_t size() {
-        auto rootNodeId = getRootNodeId();
-        auto &rootNode = getNodeRead(rootNodeId).get();
+        auto rootNodePtr = getNodeRead(getRootNodeId());
+        if (!rootNodePtr.exists()) return 0;
+        auto &rootNode = rootNodePtr.get();
         return rootNode.accumCount;
     }
 
     const Item &getItem(size_t index) {
+        if (index >= size()) throw err("out of range");
+
         Item *out;
         traverseToOffset(index, [&](Node &node, size_t index){
             out = &node.items[index].item;
@@ -284,11 +289,8 @@ struct BTree /*: StorageBase*/ {
     }
 
     void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
-        auto rootNodeId = getRootNodeId();
-        auto &rootNode = getNodeRead(rootNodeId).get();
-
         if (begin > end) throw err("begin > end");
-        if (end > rootNode.accumCount) throw err("out of range");
+        if (end > size()) throw err("out of range");
 
         size_t num = end - begin;
 
@@ -307,6 +309,7 @@ struct BTree /*: StorageBase*/ {
 
     size_t findLowerBound(const Bound &value) {
         auto rootNodePtr = getNodeRead(getRootNodeId());
+        if (!rootNodePtr.exists()) return 0;
         auto &rootNode = rootNodePtr.get();
         if (value.item <= rootNode.items[0].item) return 0;
         return findLowerBoundAux(value, rootNodePtr, 0);
