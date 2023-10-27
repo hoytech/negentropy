@@ -49,18 +49,21 @@ int main() {
 
 
 
+/*
     std::cout << "-----------------" << std::endl;
     std::cout << "SIZE = " << btree.size() << std::endl;
 
     for (size_t i = 0; i < btree.size(); i++) {
-        std::cout << "GI = " << btree.getItem(i).timestamp << std::endl;
+        std::cout << "GI " << i << "  = " << btree.getItem(i).timestamp << std::endl;
     }
 
     btree.iterate(5, 8, [&](const auto &item, size_t i) {
         std::cout << "II = " << item.timestamp << " (" << i << ")" << std::endl;
         return true;
     });
-/*
+
+
+    std::cout << "FLB: " << btree.findLowerBound(negentropy::Bound(1031)) << std::endl;
     */
 
     return 0;

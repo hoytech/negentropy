@@ -207,7 +207,7 @@ struct BTree /*: StorageBase*/ {
             }
         }
 
-        // Out of breadcrumbs but still needs to merge: New level required
+        // Out of breadcrumbs but still need to merge: New level required
 
         if (needsMerge) {
             auto &left = getNodeRead(rootNodeId).get();
@@ -244,16 +244,6 @@ struct BTree /*: StorageBase*/ {
         }
     }
 
-
-    //// Interface
-
-    uint64_t size() {
-        auto rootNodeId = getRootNodeId();
-        auto &rootNode = getNodeRead(rootNodeId).get();
-        return rootNode.accumCount;
-    }
-
-
     void traverseToOffset(size_t index, const std::function<void(Node &node, size_t index)> &cb) {
         auto rootNodeId = getRootNodeId();
         auto &rootNode = getNodeRead(rootNodeId).get();
@@ -274,6 +264,16 @@ struct BTree /*: StorageBase*/ {
         }
 
         __builtin_unreachable();
+    }
+
+
+
+    //// Interface
+
+    uint64_t size() {
+        auto rootNodeId = getRootNodeId();
+        auto &rootNode = getNodeRead(rootNodeId).get();
+        return rootNode.accumCount;
     }
 
     const Item &getItem(size_t index) {
@@ -306,43 +306,32 @@ struct BTree /*: StorageBase*/ {
         });
     }
 
-/*
-    void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
-        auto rootNodeId = getRootNodeId();
-        auto &rootNode = getNodeRead(rootNodeId).get();
-
-        if (begin > end) throw err("begin > end");
-        if (end > rootNode.accumCount) throw err("out of range");
-
-        return iterateAux(begin, end - begin, rootNode, cb);
+    size_t findLowerBound(const Bound &value) {
+        auto rootNodePtr = getNodeRead(getRootNodeId());
+        auto &rootNode = rootNodePtr.get();
+        if (value.item <= rootNode.items[0].item) return 0;
+        return findLowerBoundAux(value, rootNodePtr, 0);
     }
 
-    void iterateAux(size_t index, size_t num, Node &node, const std::function<bool(const Item &, size_t)> &cb) {
-        if (node.numItems == node.accumCount) {
-            Node *currNode = &node;
-            for (size_t i = 0; i < num; i++) {
-                if (!cb(currNode->items[index].item, i)) return;
-                index++;
-                if (index >= currNode->numItems) {
-                    currNode = getNodeRead(currNode->nextLeaf).p;
-                    index = 0;
-                }
+    size_t findLowerBoundAux(const Bound &value, NodePtr nodePtr, uint64_t numToLeft) {
+        if (!nodePtr.exists()) return numToLeft + 1;
+
+        Node &node = nodePtr.get();
+
+        for (size_t i = 1; i < node.numItems; i++) {
+            if (value.item < node.items[i].item) {
+                return findLowerBoundAux(value, getNodeRead(node.items[i - 1].nodeId), numToLeft);
+            } else {
+                if (node.items[i - 1].nodeId) numToLeft += getNodeRead(node.items[i - 1].nodeId).get().accumCount;
+                else numToLeft++;
             }
-            return;
         }
 
-        for (size_t i = 0; i < node.numItems; i++) {
-            auto &child = getNodeRead(node.items[i].nodeId).get();
-            if (index < child.accumCount) {
-                iterateAux(index, num, child, cb);
-                return;
-            }
-            index -= child.accumCount;
-        }
-
-        __builtin_unreachable();
+        return findLowerBoundAux(value, getNodeRead(node.items[node.numItems - 1].nodeId), numToLeft);
     }
-    */
+
+    Fingerprint fingerprint(size_t begin, size_t end) {
+    }
 
 
 
