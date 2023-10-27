@@ -1,4 +1,6 @@
 #include <iostream>
+#include <cstdlib>
+
 #include <sstream>
 #include <memory>
 
@@ -22,6 +24,7 @@ int main() {
     auto add = [&](uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, '\x01'));
         btree.insert(item);
+        btree.verify();
     };
 
     for (size_t i = 100; i < 114; i++) add(i * 10);
@@ -32,10 +35,15 @@ int main() {
     add(1083);
     add(1084);
     add(1085);
+    add(89);
+
+
+    //srand(0);
+    //for (int i = 0; i < 1000; i++) add(rand());
+
+
 
     btree.walk();
-
-    btree.verify();
 
 /*
     std::cout << "-----------------" << std::endl;

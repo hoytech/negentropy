@@ -9,6 +9,7 @@ namespace negentropy { namespace storage {
 
 using err = std::runtime_error;
 
+const size_t MIN_ITEMS = 1;
 const size_t MAX_ITEMS = 4;
 
 struct Key {
@@ -151,6 +152,10 @@ struct BTree /*: StorageBase*/ {
                 auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
                 node.accum.add(newItem.id);
                 node.accumCount++;
+                {
+                    auto &childNode = getNodeRead(node.items[crumb.index].nodeId).get();
+                    node.items[crumb.index].item = childNode.items[0].item;
+                }
                 continue;
             }
 
@@ -160,10 +165,17 @@ struct BTree /*: StorageBase*/ {
 
                 node.items[node.numItems] = newKey;
                 std::inplace_merge(node.items, node.items + node.numItems, node.items + node.numItems + 1);
-
                 node.numItems++;
+
                 node.accum.add(newItem.id);
                 node.accumCount++;
+                {
+                    auto childNodePtr = getNodeRead(node.items[0].nodeId);
+                    if (childNodePtr.exists()) {
+                        auto &childNode = childNodePtr.get();
+                        node.items[0].item = childNode.items[0].item;
+                    }
+                }
 
                 needsMerge = false;
             } else {
@@ -366,7 +378,7 @@ struct BTree /*: StorageBase*/ {
         auto nodePtr = getNodeRead(nodeId);
         auto &node = nodePtr.get();
 
-        if (node.numItems < 1) throw err("verify: too few items");
+        if (node.numItems < MIN_ITEMS) throw err("verify: too few items");
         if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
         if (node.items[0].nodeId == 0) {
@@ -392,7 +404,6 @@ struct BTree /*: StorageBase*/ {
                 {
                     auto firstChildPtr = getNodeRead(childNodeId);
                     auto &firstChild = firstChildPtr.get();
-                    std::cout << firstChild.items[0].item.timestamp << " / " << node.items[i].item.timestamp << std::endl;
                     if (firstChild.numItems == 0 || firstChild.items[0].item != node.items[i].item) throw err("verify: key does not match child's first key");
                 }
                 verify(childNodeId, depth + 1, ctx, &accum, &accumCount);
