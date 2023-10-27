@@ -244,14 +244,14 @@ struct BTree /*: StorageBase*/ {
         }
     }
 
-    void traverseToOffset(size_t index, const std::function<void(Node &node, size_t index)> &cb) {
+    void traverseToOffset(size_t index, const std::function<void(Node &node, size_t index)> &cb, std::function<void(Node &)> customAccum = nullptr) {
         auto rootNodeId = getRootNodeId();
         auto &rootNode = getNodeRead(rootNodeId).get();
-        if (index >= rootNode.accumCount) throw err("out of range");
-        return traverseToOffsetAux(index, rootNode, cb);
+        if (index > rootNode.accumCount) throw err("out of range");
+        return traverseToOffsetAux(index, rootNode, cb, customAccum);
     }
 
-    void traverseToOffsetAux(size_t index, Node &node, const std::function<void(Node &node, size_t index)> &cb) {
+    void traverseToOffsetAux(size_t index, Node &node, const std::function<void(Node &node, size_t index)> &cb, std::function<void(Node &)> customAccum) {
         if (node.numItems == node.accumCount) {
             cb(node, index);
             return;
@@ -259,11 +259,10 @@ struct BTree /*: StorageBase*/ {
 
         for (size_t i = 0; i < node.numItems; i++) {
             auto &child = getNodeRead(node.items[i].nodeId).get();
-            if (index < child.accumCount) return traverseToOffsetAux(index, child, cb);
+            if (index < child.accumCount) return traverseToOffsetAux(index, child, cb, customAccum);
             index -= child.accumCount;
+            if (customAccum) customAccum(child);
         }
-
-        __builtin_unreachable();
     }
 
 
@@ -331,6 +330,28 @@ struct BTree /*: StorageBase*/ {
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {
+        if (begin > end) throw err("begin > end");
+
+        auto getAccumLeftOf = [&](size_t index) {
+            Accumulator accum;
+            accum.setToZero();
+
+            traverseToOffset(index, [&](Node &node, size_t index){
+                for (size_t i = 0; i < index; i++) accum.add(node.items[i].item);
+            }, [&](Node &node){
+                accum.add(node.accum);
+            });
+
+            return accum;
+        };
+
+        auto accum1 = getAccumLeftOf(begin);
+        auto accum2 = getAccumLeftOf(end);
+
+        accum1.negate();
+        accum2.add(accum1);
+
+        return accum2.getFingerprint(end - begin);
     }
 
 
