@@ -107,7 +107,7 @@ struct BTree /*: StorageBase*/ {
         }
 
 
-        // Traverse interior nodes, build up breadcrumbs
+        // Traverse interior nodes, leaving breadcrumbs along the way
 
         struct Breadcrumb {
             size_t index;
@@ -139,7 +139,7 @@ struct BTree /*: StorageBase*/ {
             }
         }
 
-        // Unwind breadcrumbs
+        // Follow breadcrumbs back to root
 
         Key newKey = { newItem, 0 };
         bool needsMerge = true;
@@ -152,14 +152,7 @@ struct BTree /*: StorageBase*/ {
                 auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
                 node.accum.add(newItem.id);
                 node.accumCount++;
-                {
-                    auto &childNode = getNodeRead(node.items[crumb.index].nodeId).get();
-                    node.items[crumb.index].item = childNode.items[0].item;
-                }
-                continue;
-            }
-
-            if (crumb.nodePtr.get().numItems < MAX_ITEMS) {
+            } else if (crumb.nodePtr.get().numItems < MAX_ITEMS) {
                 // Happy path: Node has room for new item
                 auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
 
@@ -169,13 +162,6 @@ struct BTree /*: StorageBase*/ {
 
                 node.accum.add(newItem.id);
                 node.accumCount++;
-                {
-                    auto childNodePtr = getNodeRead(node.items[0].nodeId);
-                    if (childNodePtr.exists()) {
-                        auto &childNode = childNodePtr.get();
-                        node.items[0].item = childNode.items[0].item;
-                    }
-                }
 
                 needsMerge = false;
             } else {
@@ -208,7 +194,20 @@ struct BTree /*: StorageBase*/ {
 
                 newKey = { right.items[0].item, rightPtr.nodeId };
             }
+
+            // Update left-most key, in case item was inserted at the beginning
+
+            {
+                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+                auto childNodePtr = getNodeRead(node.items[0].nodeId);
+                if (childNodePtr.exists()) {
+                    auto &childNode = childNodePtr.get();
+                    node.items[0].item = childNode.items[0].item;
+                }
+            }
         }
+
+        // Out of breadcrumbs but still needs to merge: New level required
 
         if (needsMerge) {
             auto &left = getNodeRead(rootNodeId).get();

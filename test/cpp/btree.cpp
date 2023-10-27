@@ -36,6 +36,12 @@ int main() {
     add(1084);
     add(1085);
     add(89);
+    add(88);
+    add(87);
+
+
+    btree.walk();
+    btree.verify();
 
 
     //srand(0);
@@ -43,7 +49,6 @@ int main() {
 
 
 
-    btree.walk();
 
 /*
     std::cout << "-----------------" << std::endl;
