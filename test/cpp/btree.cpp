@@ -19,11 +19,15 @@ int main() {
 
     negentropy::storage::BTree btree;
 
-
-    for (size_t i = 100; i < 107; i++) {
-        negentropy::Item item(i, std::string(32, '\x01'));
+    auto add = [&](uint64_t timestamp){
+        negentropy::Item item(timestamp, std::string(32, '\x01'));
         btree.insert(item);
-    }
+    };
+
+    for (size_t i = 100; i < 114; i++) add(i * 2);
+
+    add(99);
+    add(213);
 
     btree.walk();
 
