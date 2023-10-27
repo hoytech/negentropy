@@ -7,7 +7,7 @@
 namespace negentropy { namespace storage {
 
 
-struct BTree : btree::BTreeCore {
+struct BTreeMem : btree::BTreeCore {
     //// Node Storage
 
     std::unordered_map<uint64_t, btree::Node> _nodeStorageMap;

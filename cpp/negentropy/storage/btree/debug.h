@@ -2,7 +2,7 @@
 
 #include <hoytech/hex.h>
 
-#include "negentropy/storage/btree.h"
+#include "negentropy/storage/btree/core.h"
 
 
 namespace negentropy { namespace storage { namespace btree {
@@ -11,7 +11,7 @@ namespace negentropy { namespace storage { namespace btree {
 using err = std::runtime_error;
 
 
-inline void dump(BTree &btree, uint64_t nodeId, int depth) {
+inline void dump(BTreeCore &btree, uint64_t nodeId, int depth) {
     if (nodeId == 0) return;
 
     auto nodePtr = btree.getNodeRead(nodeId);
@@ -26,7 +26,7 @@ inline void dump(BTree &btree, uint64_t nodeId, int depth) {
     }
 }
 
-inline void dump(BTree &btree) {
+inline void dump(BTreeCore &btree) {
     dump(btree, btree.getRootNodeId(), 0);
 }
 
@@ -36,7 +36,7 @@ struct VerifyContext {
     std::vector<uint64_t> leafNodeIds;
 };
 
-inline void verify(BTree &btree, uint64_t nodeId, uint64_t depth, VerifyContext &ctx, Accumulator *accumOut = nullptr, uint64_t *accumCountOut = nullptr) {
+inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyContext &ctx, Accumulator *accumOut = nullptr, uint64_t *accumCountOut = nullptr) {
     if (nodeId == 0) return;
 
     auto nodePtr = btree.getNodeRead(nodeId);
@@ -85,7 +85,7 @@ inline void verify(BTree &btree, uint64_t nodeId, uint64_t depth, VerifyContext 
     if (accumCountOut) *accumCountOut += accumCount;
 }
 
-inline void verify(BTree &btree) {
+inline void verify(BTreeCore &btree) {
     VerifyContext ctx;
     Accumulator accum;
     accum.setToZero();
