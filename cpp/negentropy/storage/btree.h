@@ -131,6 +131,8 @@ struct BTree /*: StorageBase*/ {
                     }
                 }
 
+                if (newItem == node.items[index].item) throw err("already inserted");
+
                 breadcrumbs.push_back({index, foundNode});
                 foundNode = getNodeRead(node.items[index].nodeId);
             }
@@ -196,7 +198,7 @@ struct BTree /*: StorageBase*/ {
             }
         }
 
-        if (needsMerge && newKey.nodeId) {
+        if (needsMerge) {
             auto &left = getNodeRead(rootNodeId).get();
             auto &right = getNodeRead(newKey.nodeId).get();
 
@@ -249,6 +251,74 @@ struct BTree /*: StorageBase*/ {
             node.accum.add(nodePtr.get().accum);
             node.accumCount += nodePtr.get().accumCount;
         }
+    }
+
+
+    //// Interface
+
+    uint64_t size() {
+        auto rootNodeId = getRootNodeId();
+        auto &rootNode = getNodeRead(rootNodeId).get();
+        return rootNode.accumCount;
+    }
+
+
+    const Item &getItem(size_t index) {
+        auto rootNodeId = getRootNodeId();
+        auto &rootNode = getNodeRead(rootNodeId).get();
+
+        if (index >= rootNode.accumCount) throw err("out of range");
+
+        return getItemAux(index, rootNode);
+    }
+
+    const Item &getItemAux(size_t index, Node &node) {
+        if (node.numItems == node.accumCount) return node.items[index].item;
+
+        for (size_t i = 0; i < node.numItems; i++) {
+            auto &child = getNodeRead(node.items[i].nodeId).get();
+            if (index < child.accumCount) return getItemAux(index, child);
+            index -= child.accumCount;
+        }
+
+        __builtin_unreachable();
+    }
+
+
+    void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
+        auto rootNodeId = getRootNodeId();
+        auto &rootNode = getNodeRead(rootNodeId).get();
+
+        if (begin > end) throw err("begin > end");
+        if (end > rootNode.accumCount) throw err("out of range");
+
+        return iterateAux(begin, end - begin, rootNode, cb);
+    }
+
+    void iterateAux(size_t index, size_t num, Node &node, const std::function<bool(const Item &, size_t)> &cb) {
+        if (node.numItems == node.accumCount) {
+            Node *currNode = &node;
+            for (size_t i = 0; i < num; i++) {
+                if (!cb(currNode->items[index].item, i)) return;
+                index++;
+                if (index >= currNode->numItems) {
+                    currNode = getNodeRead(currNode->nextLeaf).p;
+                    index = 0;
+                }
+            }
+            return;
+        }
+
+        for (size_t i = 0; i < node.numItems; i++) {
+            auto &child = getNodeRead(node.items[i].nodeId).get();
+            if (index < child.accumCount) {
+                iterateAux(index, num, child, cb);
+                return;
+            }
+            index -= child.accumCount;
+        }
+
+        __builtin_unreachable();
     }
 };
 

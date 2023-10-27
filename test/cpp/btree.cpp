@@ -24,12 +24,28 @@ int main() {
         btree.insert(item);
     };
 
-    for (size_t i = 100; i < 114; i++) add(i * 2);
+    for (size_t i = 100; i < 114; i++) add(i * 10);
 
     add(99);
-    add(213);
+    add(1081);
+    add(1082);
+    add(1083);
+    add(1084);
+    add(1085);
 
     btree.walk();
+
+    std::cout << "-----------------" << std::endl;
+    std::cout << "SIZE = " << btree.size() << std::endl;
+
+    for (size_t i = 0; i < btree.size(); i++) {
+        std::cout << "GI = " << btree.getItem(i).timestamp << std::endl;
+    }
+
+    btree.iterate(0, 20, [&](const auto &item, size_t i) {
+        std::cout << "II = " << item.timestamp << " (" << i << ")" << std::endl;
+        return i < 14;
+    });
 
     return 0;
 }
