@@ -219,26 +219,6 @@ struct BTree /*: StorageBase*/ {
         }
     }
 
-    void walk() {
-        walk(getRootNodeId(), 0);
-    }
-
-    void walk(uint64_t nodeId, int depth) {
-        if (nodeId == 0) return;
-
-        auto nodePtr = getNodeRead(nodeId);
-        auto &node = nodePtr.get();
-        std::string indent(depth * 4, ' ');
-
-        std::cout << indent << "NODE id=" << nodeId << " numItems=" << node.numItems << " accum=" << hoytech::to_hex(node.accum.sv()) << " accumCount=" << node.accumCount << std::endl;
-
-        for (size_t i = 0; i < node.numItems; i++) {
-            std::cout << indent << "  item: " << node.items[i].item.timestamp << "," << hoytech::to_hex(node.items[i].item.getId()) << std::endl;
-            walk(node.items[i].nodeId, depth + 1);
-        }
-    }
-
-
 
     //// Utils
 
@@ -320,6 +300,116 @@ struct BTree /*: StorageBase*/ {
 
         __builtin_unreachable();
     }
+
+
+
+    //// Debug
+
+    void walk() {
+        walk(getRootNodeId(), 0);
+    }
+
+    void walk(uint64_t nodeId, int depth) {
+        if (nodeId == 0) return;
+
+        auto nodePtr = getNodeRead(nodeId);
+        auto &node = nodePtr.get();
+        std::string indent(depth * 4, ' ');
+
+        std::cout << indent << "NODE id=" << nodeId << " numItems=" << node.numItems << " accum=" << hoytech::to_hex(node.accum.sv()) << " accumCount=" << node.accumCount << std::endl;
+
+        for (size_t i = 0; i < node.numItems; i++) {
+            std::cout << indent << "  item: " << node.items[i].item.timestamp << "," << hoytech::to_hex(node.items[i].item.getId()) << std::endl;
+            walk(node.items[i].nodeId, depth + 1);
+        }
+    }
+
+
+    struct VerifyContext {
+        std::optional<uint64_t> leafDepth;
+        std::vector<uint64_t> leafNodeIds;
+    };
+
+    void verify() {
+        VerifyContext ctx;
+        Accumulator accum;
+        accum.setToZero();
+        uint64_t accumCount = 0;
+
+        verify(getRootNodeId(), 0, ctx, &accum, &accumCount);
+
+        if (ctx.leafNodeIds.size()) {
+            uint64_t i = 0, totalItems = 0;
+            auto nodePtr = getNodeRead(ctx.leafNodeIds[0]);
+            std::optional<Item> prevItem;
+
+            while (nodePtr.exists()) {
+                auto &node = nodePtr.get();
+                if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
+                nodePtr = getNodeRead(node.nextLeaf);
+                i++;
+
+                for (size_t j = 0; j < node.numItems; j++) {
+                    if (prevItem && !(*prevItem < node.items[j].item)) throw err("verify: leaf item out of order");
+                    prevItem = node.items[j].item;
+                    totalItems++;
+                }
+            }
+
+            if (totalItems != accumCount) throw err("verify: leaf count mismatch");
+        }
+    }
+
+    void verify(uint64_t nodeId, uint64_t depth, VerifyContext &ctx, Accumulator *accumOut = nullptr, uint64_t *accumCountOut = nullptr) {
+        if (nodeId == 0) return;
+
+        auto nodePtr = getNodeRead(nodeId);
+        auto &node = nodePtr.get();
+
+        if (node.numItems < 1) throw err("verify: too few items");
+        if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
+
+        if (node.items[0].nodeId == 0) {
+            if (ctx.leafDepth) {
+                if (*ctx.leafDepth != depth) throw err("verify: mismatch of leaf depth");
+            } else {
+                ctx.leafDepth = depth;
+            }
+
+            ctx.leafNodeIds.push_back(nodeId);
+        }
+
+        Accumulator accum;
+        accum.setToZero();
+        uint64_t accumCount = 0;
+
+        for (size_t i = 0; i < node.numItems; i++) {
+            uint64_t childNodeId = node.items[i].nodeId;
+            if (childNodeId == 0) {
+                accum.add(node.items[i].item);
+                accumCount++;
+            } else {
+                {
+                    auto firstChildPtr = getNodeRead(childNodeId);
+                    auto &firstChild = firstChildPtr.get();
+                    std::cout << firstChild.items[0].item.timestamp << " / " << node.items[i].item.timestamp << std::endl;
+                    if (firstChild.numItems == 0 || firstChild.items[0].item != node.items[i].item) throw err("verify: key does not match child's first key");
+                }
+                verify(childNodeId, depth + 1, ctx, &accum, &accumCount);
+            }
+
+            if (i < node.numItems - 1) {
+                if (!(node.items[i].item < node.items[i + 1].item)) throw err("verify: items out of order");
+            }
+        }
+
+        if (accum.sv() != node.accum.sv()) throw err("verify: accum mismatch");
+        if (accumCount != node.accumCount) throw err("verify: accumCount mismatch");
+
+        if (accumOut) accumOut->add(accum);
+        if (accumCountOut) *accumCountOut += accumCount;
+    }
+
 };
 
 

@@ -35,6 +35,9 @@ int main() {
 
     btree.walk();
 
+    btree.verify();
+
+/*
     std::cout << "-----------------" << std::endl;
     std::cout << "SIZE = " << btree.size() << std::endl;
 
@@ -46,6 +49,7 @@ int main() {
         std::cout << "II = " << item.timestamp << " (" << i << ")" << std::endl;
         return i < 14;
     });
+    */
 
     return 0;
 }
