@@ -168,12 +168,20 @@ struct BTree /*: StorageBase*/ {
         auto currNode = getNodeRead(rootNodeId);
 
         while (!currNode.isLeaf()) {
-            throw err("diving not impl");
+            const auto &interior = *currNode.interior();
+
+            for (size_t i = 0; i < interior.numChildren; i++) {
+                if (i == (interior.numChildren - 1) || newItem <= interior.children[i].splitKey) {
+                    breadcrumbs.push_back({i, currNode});
+                    currNode = getNodeRead(interior.children[i].childNodeId);
+                    break;
+                }
+            }
         }
 
         // Update leaf node
 
-        std::optional<NodePtr> newNode;
+        std::optional<NodePtr> newInterior;
 
         if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
             // Happy path: Leaf has room for new item
@@ -190,7 +198,6 @@ struct BTree /*: StorageBase*/ {
 
             auto &left = *getNodeWrite(currNode.nodeId).leaf();
             auto rightPtr = makeNewLeaf();
-            newNode = rightPtr;
             auto &right = *rightPtr.leaf();
 
             Item tmpItems[MAX_ITEMS_PER_LEAF_NODE + 1];
@@ -214,17 +221,65 @@ struct BTree /*: StorageBase*/ {
 
             right.nextLeaf = left.nextLeaf;
             left.nextLeaf = rightPtr.nodeId;
+
+            // Create interior
+
+            newInterior = makeNewInterior();
+            auto &interior = *newInterior->interior();
+            interior.numChildren = 2;
+
+            interior.accum.add(left.accum);
+            interior.accum.add(right.accum);
+            interior.numItems = left.numItems + right.numItems;
+
+            interior.children[0].childNodeId = currNode.nodeId;
+            interior.children[0].splitKey = left.items[left.numItems - 1];
+            interior.children[1].childNodeId = rightPtr.nodeId;
+            interior.children[1].splitKey = right.items[right.numItems - 1];
         }
 
-        // Merge upwards
+        // Split upwards
 
-        if (newNode && breadcrumbs.size() == 0) {
-            auto newInterior = makeNewInterior();
-            newInterior.numChildren = 2;
+        while (breadcrumbs.size()) {
+            auto bc = breadcrumbs.back();
+            breadcrumbs.pop_back();
+
+            auto &oldInterior = *getNodeWrite(bc.node.nodeId).interior();
+
+            if (newInterior) {
+                throw err("not impl");
+            /*
+                if (oldInterior.numChildren < MAX_CHILDREN_PER_INTERIOR_NODE) {
+                    // Happy path: No splitting needed
+
+                    {
+                        auto &left = *getNodeWrite(oldInterior. bc.index
+                    }
+
+                    oldInterior.children[oldInterior.numChildren] = { };
+
+                    oldInterior.numItems++;
+                    oldInterior.accum.add(newItem.id);
+                } else {
+                    throw err("not impl");
+                }
+                */
+            } else {
+                oldInterior.numItems++;
+                oldInterior.accum.add(newItem.id);
+            }
+        }
+
+        if (newInterior) {
+            setRootNodeId(newInterior->nodeId);
         }
     }
 
-    void walk(uint64_t nodeId = 1, int depth = 0) {
+    void walk() {
+        walk(getRootNodeId(), 0);
+    }
+
+    void walk(uint64_t nodeId, int depth) {
         auto currNode = getNodeRead(nodeId);
         std::string indent(depth * 4, ' ');
 
@@ -235,6 +290,14 @@ struct BTree /*: StorageBase*/ {
 
             for (size_t i = 0; i < leaf.numItems; i++) {
                 std::cout << indent << "  item: " << leaf.items[i].timestamp << "," << hoytech::to_hex(leaf.items[i].getId()) << std::endl;
+            }
+        } else {
+            const auto &interior = *currNode.interior();
+
+            std::cout << indent << "INTERIOR id=" << nodeId << " numItems=" << interior.numItems << " accum=" << hoytech::to_hex(interior.accum.sv()) << std::endl;
+
+            for (size_t i = 0; i < interior.numChildren; i++) {
+                walk(interior.children[i].childNodeId, depth + 1);
             }
         }
     }

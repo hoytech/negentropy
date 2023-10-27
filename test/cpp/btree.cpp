@@ -20,18 +20,8 @@ int main() {
     negentropy::storage::BTree btree;
 
 
-    {
-        negentropy::Item item(100, std::string(32, '\x01'));
-        btree.insert(item);
-    }
-
-    {
-        negentropy::Item item(99, std::string(32, '\x01'));
-        btree.insert(item);
-    }
-
-    {
-        negentropy::Item item(101, std::string(32, '\x01'));
+    for (size_t i = 100; i < 107; i++) {
+        negentropy::Item item(i, std::string(32, '\x01'));
         btree.insert(item);
     }
 
