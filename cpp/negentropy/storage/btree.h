@@ -12,7 +12,7 @@ using err = std::runtime_error;
 //const size_t MAX_ITEMS_PER_LEAF_NODE = 64;
 //const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 32;
 const size_t MAX_ITEMS_PER_LEAF_NODE = 4;
-const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 3;
+const size_t MAX_CHILDREN_PER_INTERIOR_NODE = 4;
 
 // Node types: 1=Leaf, 2=Interior
 
@@ -23,7 +23,7 @@ struct LeafNode {
     Accumulator accum;
 
     uint64_t nextLeaf;
-    Item items[MAX_ITEMS_PER_LEAF_NODE];
+    Item items[MAX_ITEMS_PER_LEAF_NODE + 1];
 
     LeafNode() {
         memset((void*)this, '\0', sizeof(*this));
@@ -32,7 +32,7 @@ struct LeafNode {
 };
 
 struct ChildSplitter {
-    Item splitKey; // max item in child
+    Item splitKey; // min item in child
     uint64_t childNodeId;
 };
 
@@ -47,7 +47,7 @@ struct InteriorNode {
     Accumulator accum;
     uint64_t numItems;
 
-    ChildSplitter children[MAX_CHILDREN_PER_INTERIOR_NODE];
+    ChildSplitter children[MAX_CHILDREN_PER_INTERIOR_NODE + 1];
 
     InteriorNode() {
         memset((void*)this, '\0', sizeof(*this));
@@ -77,13 +77,13 @@ struct NodePtr {
         return (InteriorNode *)p;
     }
 
-    Item maxKey() {
+    Item minKey() {
         if (isLeaf()) {
             auto *p = leaf();
-            return p->items[p->numItems - 1];
+            return p->items[0];
         } else {
             auto *p = interior();
-            return p->children[p->numChildren].splitKey;
+            return p->children[0].splitKey;
         }
     }
 };
@@ -165,15 +165,15 @@ struct BTree /*: StorageBase*/ {
         };
 
         std::vector<Breadcrumb> breadcrumbs;
-        auto currNode = getNodeRead(rootNodeId);
+        auto foundNode = getNodeRead(rootNodeId);
 
-        while (!currNode.isLeaf()) {
-            const auto &interior = *currNode.interior();
+        while (!foundNode.isLeaf()) {
+            const auto &interior = *foundNode.interior();
 
-            for (size_t i = 0; i < interior.numChildren; i++) {
-                if (i == (interior.numChildren - 1) || newItem <= interior.children[i].splitKey) {
-                    breadcrumbs.push_back({i, currNode});
-                    currNode = getNodeRead(interior.children[i].childNodeId);
+            for (size_t i = 1; i < interior.numChildren + 1; i++) {
+                if (i == interior.numChildren + 1 || newItem < interior.children[i].splitKey) {
+                    breadcrumbs.push_back({i - 1, foundNode});
+                    foundNode = getNodeRead(interior.children[i - 1].childNodeId);
                     break;
                 }
             }
@@ -181,12 +181,12 @@ struct BTree /*: StorageBase*/ {
 
         // Update leaf node
 
-        std::optional<NodePtr> newInterior;
+        auto newNode = NodePtr{nullptr, 0};
 
-        if (currNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
+        if (foundNode.leaf()->numItems < MAX_ITEMS_PER_LEAF_NODE) {
             // Happy path: Leaf has room for new item
 
-            auto &leaf = *getNodeWrite(currNode.nodeId).leaf();
+            auto &leaf = *getNodeWrite(foundNode.nodeId).leaf();
 
             leaf.items[leaf.numItems] = newItem;
             std::inplace_merge(leaf.items, leaf.items + leaf.numItems, leaf.items + leaf.numItems + 1);
@@ -196,49 +196,55 @@ struct BTree /*: StorageBase*/ {
         } else {
             // Leaf is full: Split it into 2
 
-            auto &left = *getNodeWrite(currNode.nodeId).leaf();
+            auto &left = *getNodeWrite(foundNode.nodeId).leaf();
             auto rightPtr = makeNewLeaf();
             auto &right = *rightPtr.leaf();
 
-            Item tmpItems[MAX_ITEMS_PER_LEAF_NODE + 1];
-            for (size_t i = 0; i < MAX_ITEMS_PER_LEAF_NODE; i++) tmpItems[i] = left.items[i];
-            tmpItems[MAX_ITEMS_PER_LEAF_NODE] = newItem;
-            std::inplace_merge(tmpItems, tmpItems + MAX_ITEMS_PER_LEAF_NODE, tmpItems + MAX_ITEMS_PER_LEAF_NODE + 1);
+            left.items[MAX_ITEMS_PER_LEAF_NODE] = newItem;
+            std::inplace_merge(left.items, left.items + MAX_ITEMS_PER_LEAF_NODE, left.items + MAX_ITEMS_PER_LEAF_NODE + 1);
 
             left.accum.setToZero();
             left.numItems = (MAX_ITEMS_PER_LEAF_NODE / 2) + 1;
             right.numItems = MAX_ITEMS_PER_LEAF_NODE / 2;
 
             for (size_t i = 0; i < left.numItems; i++) {
-                left.items[i] = tmpItems[i];
                 left.accum.add(left.items[i]);
             }
 
             for (size_t i = 0; i < right.numItems; i++) {
-                right.items[i] = tmpItems[left.numItems + i];
+                right.items[i] = left.items[left.numItems + i];
                 right.accum.add(right.items[i]);
             }
 
             right.nextLeaf = left.nextLeaf;
             left.nextLeaf = rightPtr.nodeId;
 
-            // Create interior
-
-            newInterior = makeNewInterior();
-            auto &interior = *newInterior->interior();
-            interior.numChildren = 2;
-
-            interior.accum.add(left.accum);
-            interior.accum.add(right.accum);
-            interior.numItems = left.numItems + right.numItems;
-
-            interior.children[0].childNodeId = currNode.nodeId;
-            interior.children[0].splitKey = left.items[left.numItems - 1];
-            interior.children[1].childNodeId = rightPtr.nodeId;
-            interior.children[1].splitKey = right.items[right.numItems - 1];
+            newNode = rightPtr;
         }
 
         // Split upwards
+
+/*
+        if (breadcrumbs.size() == 0 && newNode.exists()) {
+            auto newInterior = makeNewInterior();
+            auto &interior = *newInterior->interior();
+            interior.numChildren = 2;
+
+            interior.accum.add(foundNode.accum);
+            interior.accum.add(newNode.accum);
+            interior.numItems = foundNode.numItems + newNode.numItems;
+
+            interior.children[0].childNodeId = foundNode.nodeId;
+            interior.children[0].splitKey = foundNode.items[foundNode.numItems - 1];
+            interior.children[1].childNodeId = newNode.nodeId;
+            interior.children[1].splitKey = newNode.items[newNode.numItems - 1];
+        }
+        */
+
+        /*
+        if (currNode.exists()) {
+            setRootNodeId(currNode.nodeId);
+        }
 
         while (breadcrumbs.size()) {
             auto bc = breadcrumbs.back();
@@ -246,33 +252,27 @@ struct BTree /*: StorageBase*/ {
 
             auto &oldInterior = *getNodeWrite(bc.node.nodeId).interior();
 
-            if (newInterior) {
-                throw err("not impl");
-            /*
+            if (currNode.exists()) {
                 if (oldInterior.numChildren < MAX_CHILDREN_PER_INTERIOR_NODE) {
                     // Happy path: No splitting needed
 
-                    {
-                        auto &left = *getNodeWrite(oldInterior. bc.index
-                    }
-
-                    oldInterior.children[oldInterior.numChildren] = { };
+                    oldInterior.children[oldInterior.numChildren] = { currNode.minKey(), currNode.nodeId };
+                    std::inplace_merge(oldInterior.children, oldInterior.children + oldInterior.numChildren, oldInterior.children + oldInterior.numChildren + 1);
+                    oldInterior.numChildren++;
 
                     oldInterior.numItems++;
                     oldInterior.accum.add(newItem.id);
+
+                    currNode = {nullptr, 0};
                 } else {
                     throw err("not impl");
                 }
-                */
             } else {
                 oldInterior.numItems++;
                 oldInterior.accum.add(newItem.id);
             }
         }
-
-        if (newInterior) {
-            setRootNodeId(newInterior->nodeId);
-        }
+            */
     }
 
     void walk() {
