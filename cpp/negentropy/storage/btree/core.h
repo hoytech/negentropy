@@ -33,7 +33,7 @@ struct Node {
     }
 
     std::string_view sv() {
-        return std::string_view(reinterpret_cast<char*>(this), sizeof(this));
+        return std::string_view(reinterpret_cast<char*>(this), sizeof(*this));
     }
 };
 

@@ -21,28 +21,59 @@ int main() {
     //std::cout << "SIZEOF LEAF: " << sizeof(negentropy::storage::LeafNode) << std::endl;
     //std::cout << "SIZEOF INTERIOR: " << sizeof(negentropy::storage::InteriorNode) << std::endl;
 
+
+    auto env = lmdb::env::create();
+    env.set_max_dbs(64);
+    env.open("testdb/", 0);
+
+
     negentropy::storage::BTreeLMDB btree;
 
-    auto add = [&](uint64_t timestamp){
-        negentropy::Item item(timestamp, std::string(32, '\x01'));
-        btree.insert(item);
-        negentropy::storage::btree::verify(btree);
-    };
-
-    for (size_t i = 100; i < 114; i++) add(i * 10);
-
-    add(99);
-    add(1081);
-    add(1082);
-    add(1083);
-    add(1084);
-    add(1085);
-    add(89);
-    add(88);
-    add(87);
+    {
+        auto txn = lmdb::txn::begin(env);
+        btree.setup(txn, "negentropy");
+        txn.commit();
+    }
 
 
-    negentropy::storage::btree::dump(btree);
+    {
+        auto txn = lmdb::txn::begin(env);
+
+        btree.withWriteTxn(txn, [&]{
+            auto add = [&](uint64_t timestamp){
+                negentropy::Item item(timestamp, std::string(32, '\x01'));
+                btree.insert(item);
+                negentropy::storage::btree::verify(btree);
+            };
+
+            for (size_t i = 100; i < 114; i++) add(i * 10);
+
+            add(99);
+            add(1081);
+            add(1082);
+            add(1083);
+            add(1084);
+            add(1085);
+            add(89);
+            add(88);
+            add(87);
+
+
+            negentropy::storage::btree::dump(btree);
+        });
+
+        txn.commit();
+    }
+
+    {
+        //auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
+        auto txn = lmdb::txn::begin(env);
+
+        //btree.withReadTxn(txn, [&]{
+        btree.withWriteTxn(txn, [&]{
+            negentropy::storage::btree::dump(btree);
+        });
+    }
 
 
 /*

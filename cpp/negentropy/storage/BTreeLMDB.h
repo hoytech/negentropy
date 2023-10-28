@@ -62,6 +62,8 @@ struct BTreeLMDB : btree::BTreeCore {
     // Interface
 
     const btree::NodePtr getNodeRead(uint64_t nodeId) {
+        if (nodeId == 0) return {nullptr, 0};
+
         auto res = _dirtyNodeCache.find(nodeId);
         if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
 
@@ -72,6 +74,8 @@ struct BTreeLMDB : btree::BTreeCore {
     }
 
     btree::NodePtr getNodeWrite(uint64_t nodeId) {
+        if (nodeId == 0) return {nullptr, 0};
+
         {
             auto res = _dirtyNodeCache.find(nodeId);
             if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
