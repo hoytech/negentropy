@@ -27,6 +27,7 @@ struct BTreeLMDB : btree::BTreeCore {
             return rootNodeId == other.rootNodeId && nextNodeId == other.nextNodeId;
         }
     };
+    uint64_t _treeId = 0;
     MetaData _metaDataCache;
     std::map<uint64_t, Node> _dirtyNodeCache;
 
@@ -65,26 +66,45 @@ struct BTreeLMDB : btree::BTreeCore {
         if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
 
         std::string_view sv;
-        bool found = dbi.get(txn(), lmdb::to_sv<uint64_t>(nodeId), sv);
+        bool found = dbi.get(txn(), getKey(nodeId), sv);
         if (!found) throw err("couldn't find node");
         return NodePtr{(Node*)sv.data(), nodeId};
     }
 
     btree::NodePtr getNodeWrite(uint64_t nodeId) {
+        {
+            auto res = _dirtyNodeCache.find(nodeId);
+            if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
+        }
+
+        std::string_view sv;
+        bool found = dbi.get(txn(), getKey(nodeId), sv);
+        if (!found) throw err("couldn't find node");
+
+        auto res = _dirtyNodeCache.try_emplace(nodeId);
+        Node *newNode = &res.first->second;
+        memcpy(newNode, sv.data(), sizeof(Node));
+
+        return NodePtr{newNode, nodeId};
+    }
+
+    btree::NodePtr makeNode() {
+        uint64_t nodeId = _metaDataCache.nextNodeId++;
         auto res = _dirtyNodeCache.try_emplace(nodeId);
         return NodePtr{&res.first->second, nodeId};
     }
 
-    btree::NodePtr makeNode() {
-    }
-
     void deleteNode(uint64_t nodeId) {
+        if (nodeId == 0) throw err("can't delete metadata");
+        dbi.del(txn(), getKey(nodeId));
     }
 
     uint64_t getRootNodeId() {
+        return _metaDataCache.rootNodeId;
     }
 
     void setRootNodeId(uint64_t newRootNodeId) {
+        _metaDataCache.rootNodeId = newRootNodeId;
     }
 
     // Internal utils
@@ -93,6 +113,7 @@ struct BTreeLMDB : btree::BTreeCore {
     void _withTxn(lmdb::txn &parentTxn, bool readOnly, const std::function<void()> &cb, uint64_t treeId) {
         auto txn = lmdb::txn::begin(parentTxn.env(), parentTxn, readOnly ? MDB_RDONLY : 0);
         _txn = &txn;
+        _treeId = treeId;
 
         Cleaner cleaner(this);
 
@@ -106,13 +127,6 @@ struct BTreeLMDB : btree::BTreeCore {
         auto origMetaData = _metaDataCache;
 
         cb();
-
-        auto getKey = [&](uint64_t n){
-            std::string k;
-            if (treeId) k += lmdb::to_sv<uint64_t>(treeId);
-            k += lmdb::to_sv<uint64_t>(n);
-            return k;
-        };
 
         for (auto &[nodeId, node] : _dirtyNodeCache) {
             dbi.put(txn, getKey(nodeId), node.sv());
@@ -129,6 +143,13 @@ struct BTreeLMDB : btree::BTreeCore {
     lmdb::txn &txn() {
         if (!_txn) throw err("txn not installed");
         return *_txn;
+    }
+
+    std::string getKey(uint64_t n) {
+        std::string k;
+        if (_treeId) k += lmdb::to_sv<uint64_t>(_treeId);
+        k += lmdb::to_sv<uint64_t>(n);
+        return k;
     }
 };
 
