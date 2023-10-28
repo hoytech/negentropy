@@ -8,13 +8,13 @@ namespace negentropy { namespace storage {
 
 
 struct BTreeMem : btree::BTreeCore {
-    //// Node Storage
-
     std::unordered_map<uint64_t, btree::Node> _nodeStorageMap;
     uint64_t _rootNodeId = 0; // 0 means no root
     uint64_t _nextNodeId = 1;
 
-    btree::NodePtr getNodeRead(uint64_t nodeId) {
+    // Interface
+
+    const btree::NodePtr getNodeRead(uint64_t nodeId) {
         if (nodeId == 0) return {nullptr, 0};
         auto res = _nodeStorageMap.find(nodeId);
         if (res == _nodeStorageMap.end()) return btree::NodePtr{nullptr, 0};

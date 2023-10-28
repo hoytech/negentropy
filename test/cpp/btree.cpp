@@ -8,7 +8,7 @@
 #include <hoytech/hex.h>
 
 #include "negentropy.h"
-#include "negentropy/storage/BTreeMem.h"
+#include "negentropy/storage/BTreeLMDB.h"
 #include "negentropy/storage/btree/debug.h"
 #include "negentropy/storage/Vector.h"
 
@@ -21,7 +21,7 @@ int main() {
     //std::cout << "SIZEOF LEAF: " << sizeof(negentropy::storage::LeafNode) << std::endl;
     //std::cout << "SIZEOF INTERIOR: " << sizeof(negentropy::storage::InteriorNode) << std::endl;
 
-    negentropy::storage::BTreeMem btree;
+    negentropy::storage::BTreeLMDB btree;
 
     auto add = [&](uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, '\x01'));

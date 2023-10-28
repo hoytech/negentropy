@@ -31,6 +31,10 @@ struct Node {
     Node() {
         memset((void*)this, '\0', sizeof(*this));
     }
+
+    std::string_view sv() {
+        return std::string_view(reinterpret_cast<char*>(this), sizeof(this));
+    }
 };
 
 struct NodePtr {
@@ -41,7 +45,7 @@ struct NodePtr {
         return p != nullptr;
     }
 
-    Node &get() {
+    Node &get() const {
         return *p;
     }
 };
@@ -50,7 +54,7 @@ struct NodePtr {
 struct BTreeCore : StorageBase {
     //// Node Storage
 
-    virtual NodePtr getNodeRead(uint64_t nodeId) = 0;
+    virtual const NodePtr getNodeRead(uint64_t nodeId) = 0;
 
     virtual NodePtr getNodeWrite(uint64_t nodeId) = 0;
 
