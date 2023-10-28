@@ -17,7 +17,6 @@ using NodePtr = negentropy::storage::btree::NodePtr;
 
 struct BTreeLMDB : btree::BTreeCore {
     lmdb::dbi dbi;
-    lmdb::txn *_txn = nullptr;
 
     struct MetaData {
         uint64_t rootNodeId;
@@ -27,9 +26,16 @@ struct BTreeLMDB : btree::BTreeCore {
             return rootNodeId == other.rootNodeId && nextNodeId == other.nextNodeId;
         }
     };
-    uint64_t _treeId = 0;
-    MetaData _metaDataCache;
-    std::map<uint64_t, Node> _dirtyNodeCache;
+
+    struct TxnCtx {
+        lmdb::txn *txn = nullptr;
+        bool readOnly;
+        uint64_t treeId;
+        MetaData metaDataCache;
+        std::map<uint64_t, Node> dirtyNodeCache;
+    };
+
+    std::optional<TxnCtx> ctx;
 
 
     void setup(lmdb::txn &txn, const std::string &tableName) {
@@ -42,11 +48,14 @@ struct BTreeLMDB : btree::BTreeCore {
         Cleaner(BTreeLMDB *self) : self(*self) {}
 
         ~Cleaner() {
-            if (self._txn) {
-                self._txn->abort();
-                self._txn = nullptr;
+            if (!self.ctx) return;
+
+            if (self.ctx->txn) {
+                if (!self.ctx->readOnly) self.ctx->txn->abort(); // abort nested transaction
+                self.ctx->txn = nullptr;
             }
-            self._dirtyNodeCache.clear();
+
+            self.ctx = std::nullopt;
         }
     };
 
@@ -64,8 +73,8 @@ struct BTreeLMDB : btree::BTreeCore {
     const btree::NodePtr getNodeRead(uint64_t nodeId) {
         if (nodeId == 0) return {nullptr, 0};
 
-        auto res = _dirtyNodeCache.find(nodeId);
-        if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
+        auto res = ctx->dirtyNodeCache.find(nodeId);
+        if (res != ctx->dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
 
         std::string_view sv;
         bool found = dbi.get(txn(), getKey(nodeId), sv);
@@ -77,15 +86,15 @@ struct BTreeLMDB : btree::BTreeCore {
         if (nodeId == 0) return {nullptr, 0};
 
         {
-            auto res = _dirtyNodeCache.find(nodeId);
-            if (res != _dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
+            auto res = ctx->dirtyNodeCache.find(nodeId);
+            if (res != ctx->dirtyNodeCache.end()) return NodePtr{&res->second, nodeId};
         }
 
         std::string_view sv;
         bool found = dbi.get(txn(), getKey(nodeId), sv);
         if (!found) throw err("couldn't find node");
 
-        auto res = _dirtyNodeCache.try_emplace(nodeId);
+        auto res = ctx->dirtyNodeCache.try_emplace(nodeId);
         Node *newNode = &res.first->second;
         memcpy(newNode, sv.data(), sizeof(Node));
 
@@ -93,8 +102,8 @@ struct BTreeLMDB : btree::BTreeCore {
     }
 
     btree::NodePtr makeNode() {
-        uint64_t nodeId = _metaDataCache.nextNodeId++;
-        auto res = _dirtyNodeCache.try_emplace(nodeId);
+        uint64_t nodeId = ctx->metaDataCache.nextNodeId++;
+        auto res = ctx->dirtyNodeCache.try_emplace(nodeId);
         return NodePtr{&res.first->second, nodeId};
     }
 
@@ -104,54 +113,65 @@ struct BTreeLMDB : btree::BTreeCore {
     }
 
     uint64_t getRootNodeId() {
-        return _metaDataCache.rootNodeId;
+        return ctx->metaDataCache.rootNodeId;
     }
 
     void setRootNodeId(uint64_t newRootNodeId) {
-        _metaDataCache.rootNodeId = newRootNodeId;
+        ctx->metaDataCache.rootNodeId = newRootNodeId;
     }
 
     // Internal utils
 
   private:
     void _withTxn(lmdb::txn &parentTxn, bool readOnly, const std::function<void()> &cb, uint64_t treeId) {
-        auto txn = lmdb::txn::begin(parentTxn.env(), parentTxn, readOnly ? MDB_RDONLY : 0);
-        _txn = &txn;
-        _treeId = treeId;
+        ctx = TxnCtx{};
+
+        lmdb::txn childTxn(nullptr);
+
+        if (readOnly) {
+            ctx->txn = &parentTxn;
+        } else {
+            childTxn = lmdb::txn::begin(parentTxn.env(), parentTxn);
+            ctx->txn = &childTxn;
+        }
+
+        ctx->treeId = treeId;
 
         Cleaner cleaner(this);
 
         {
             static_assert(sizeof(MetaData) == 16);
             std::string_view v;
-            bool found = dbi.get(txn, lmdb::to_sv<uint64_t>(0), v);
-            _metaDataCache = found ? lmdb::from_sv<MetaData>(v) : MetaData{ 0, 1, };
+            bool found = dbi.get(txn(), lmdb::to_sv<uint64_t>(0), v);
+            ctx->metaDataCache = found ? lmdb::from_sv<MetaData>(v) : MetaData{ 0, 1, };
         }
 
-        auto origMetaData = _metaDataCache;
+        auto origMetaData = ctx->metaDataCache;
 
         cb();
 
-        for (auto &[nodeId, node] : _dirtyNodeCache) {
-            dbi.put(txn, getKey(nodeId), node.sv());
+        for (auto &[nodeId, node] : ctx->dirtyNodeCache) {
+            dbi.put(txn(), getKey(nodeId), node.sv());
         }
 
-        if (_metaDataCache != origMetaData) {
-            dbi.put(txn, getKey(0), lmdb::to_sv<MetaData>(_metaDataCache));
+        if (ctx->metaDataCache != origMetaData) {
+            dbi.put(txn(), getKey(0), lmdb::to_sv<MetaData>(ctx->metaDataCache));
         }
 
-        txn.commit();
-        _txn = nullptr;
+        if (!ctx->readOnly) {
+            ctx->txn->commit();
+            ctx->txn = nullptr;
+        }
     }
 
     lmdb::txn &txn() {
-        if (!_txn) throw err("txn not installed");
-        return *_txn;
+        if (!ctx || !ctx->txn) throw err("txn not installed");
+        return *ctx->txn;
     }
 
     std::string getKey(uint64_t n) {
         std::string k;
-        if (_treeId) k += lmdb::to_sv<uint64_t>(_treeId);
+        if (ctx->treeId) k += lmdb::to_sv<uint64_t>(ctx->treeId);
         k += lmdb::to_sv<uint64_t>(n);
         return k;
     }

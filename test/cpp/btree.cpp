@@ -66,11 +66,9 @@ int main() {
     }
 
     {
-        //auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
-        auto txn = lmdb::txn::begin(env);
+        auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
 
-        //btree.withReadTxn(txn, [&]{
-        btree.withWriteTxn(txn, [&]{
+        btree.withReadTxn(txn, [&]{
             negentropy::storage::btree::dump(btree);
         });
     }
