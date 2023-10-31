@@ -7,8 +7,8 @@ namespace negentropy { namespace storage { namespace btree {
 
 using err = std::runtime_error;
 
-const size_t MIN_ITEMS = 1;
-const size_t MAX_ITEMS = 4;
+const size_t MIN_ITEMS = 30;
+const size_t MAX_ITEMS = 80;
 
 struct Key {
     Item item;
