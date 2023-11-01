@@ -1,6 +1,10 @@
-test JS in browser
+range randomisation
+
+release js package to npm
 
 ? coalesce Idlist ranges in buildOutput
   - at least empty ones! for example when P1=1 P2=0 P3=0
 
 ? is 16 * 2 optimal in splitRange
+
+? figure out how to merge deno branch
