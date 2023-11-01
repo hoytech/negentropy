@@ -1,6 +1,8 @@
 // (C) 2023 Doug Hoyte. MIT license
 
 const PROTOCOL_VERSION_0 = 0x60;
+const ID_SIZE = 32;
+const FINGERPRINT_SIZE = 16;
 
 const Mode = {
     Skip: 0,
@@ -50,6 +52,104 @@ class WrappedBuffer {
         this._raw = this._raw.subarray(n);
         this.length -= n;
         return firstSubarray;
+    }
+}
+
+
+class Accumulator {
+    constructor() {
+        this.setToZero();
+    }
+
+    setToZero() {
+        this.buf = new Uint8Array(ID_SIZE);
+    }
+
+    add(otherBuf) {
+        let currCarry = 0, nextCarry = 0;
+        let p = new DataView(this.buf.buffer);
+        let po = new DataView(otherBuf.buffer);
+
+        for (let i = 0; i < 8; i++) {
+            let orig = p.getUint32(i * 4, true);
+            let otherV = po.getUint32(i * 4, true);
+
+            let next = orig;
+
+            next += currCarry;
+            next += otherV;
+            if (next > 0xFFFFFFFF) nextCarry = 1;
+
+            p.setUint32(i * 4, next & 0xFFFFFFFF, true);
+            currCarry = nextCarry;
+            nextCarry = 0;
+        }
+    }
+};
+
+
+class NegentropyStorageVector {
+    constructor() {
+        this.items = [];
+        this.sealed = false;
+    }
+
+    addItem(timestamp, id) {
+        if (this.sealed) throw Error("already sealed");
+        id = loadInputBuffer(id);
+        if (id.byteLength !== ID_SIZE) throw Error("bad id size for added item");
+        this.addedItems.push([ timestamp, id ]);
+    }
+
+    seal() {
+        if (this.sealed) throw Error("already sealed");
+        this.sealed = true;
+
+        this.items.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : compareUint8Array(a[1], b[1]));
+
+        for (let i = 1; i < this.items.length; i++) {
+            if (this.items[i - 1][0] == this.items[i][0] && this.items[i - 1][1] == this.items[i][1]) throw negentropy::err("duplicate item inserted");
+        }
+    }
+
+    size() {
+        this._checkSealed();
+        return this.items.length;
+    }
+
+    getItem(i) {
+        this._checkSealed();
+        return this.items[i];
+    }
+
+    iterate(begin, end, cb) {
+        this._checkSealed();
+        if (begin > end || end > this.items.length) throw Error("bad range");
+
+        for (let i = begin; i < end; ++i) {
+            if (!cb(this.items[i], i)) break;
+        }
+    }
+
+    findLowerBound(bound) {
+        this._checkSealed();
+        throw Error("not impl");
+    }
+
+    fingerprint(begin, end) {
+        let out = new Accumulator();
+        out.setToZero();
+
+        iterate(begin, end, (item, i) => {
+            out.add(item[1]);
+            return true;
+        });
+
+        return out.getFingerprint(end - begin);
+    }
+
+    _checkSealed() {
+        if (!this.sealed) throw Error("not sealed");
     }
 }
 
@@ -121,12 +221,6 @@ class Negentropy {
 
     _maxBound() {
         return { timestamp: Number.MAX_VALUE, id: new Uint8Array(0) };
-    }
-
-    _loadInputBuffer(inp) {
-        if (typeof(inp) === 'string') inp = hexToUint8Array(inp);
-        else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp); // node Buffer?
-        return inp;
     }
 
     numItems() {
@@ -494,6 +588,11 @@ class Negentropy {
     };
 }
 
+function loadInputBuffer(inp) {
+    if (typeof(inp) === 'string') inp = hexToUint8Array(inp);
+    else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp); // node Buffer?
+    return inp;
+}
 
 function hexToUint8Array(h) {
     if (h.startsWith('0x')) h = h.substr(2);
