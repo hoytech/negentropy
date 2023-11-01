@@ -1,7 +1,5 @@
 const readline = require('readline');
-const Negentropy = require('../../js/Negentropy.js');
-
-const idSize = 16;
+const { Negentropy, NegentropyStorageVector } = require('../../js/Negentropy.js');
 
 let frameSizeLimit = 0;
 if (process.env.FRAMESIZELIMIT) frameSizeLimit = parseInt(process.env.FRAMESIZELIMIT);
@@ -12,7 +10,8 @@ const rl = readline.createInterface({
     terminal: false
 });
 
-let ne = new Negentropy(idSize, frameSizeLimit);
+let ne;
+let storage = new NegentropyStorageVector();
 
 rl.on('line', async (line) => {
     let items = line.split(',');
@@ -21,9 +20,10 @@ rl.on('line', async (line) => {
         if (items.length !== 3) throw Error("too few items");
         let created = parseInt(items[1]);
         let id = items[2].trim();
-        ne.addItem(created, id);
+        storage.insert(created, id);
     } else if (items[0] == "seal") {
-        ne.seal();
+        storage.seal();
+        ne = new Negentropy(storage, frameSizeLimit);
     } else if (items[0] == "initiate") {
         let q = await ne.initiate();
         if (frameSizeLimit && q.length/2 > frameSizeLimit) throw Error("frameSizeLimit exceeded");
