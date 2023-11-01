@@ -1,4 +1,10 @@
-test JS in browser
+measure best choice for btree branching factor
+support deletion in btree
+update JS and rust impls
+do edits to article
+
+randomisation
+figure out how to merge deno branch
 
 ? coalesce Idlist ranges in buildOutput
   - at least empty ones! for example when P1=1 P2=0 P3=0
