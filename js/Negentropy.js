@@ -133,7 +133,7 @@ class NegentropyStorageVector {
 
     findLowerBound(bound) {
         this._checkSealed();
-        throw Error("not impl");
+        return findLowerBound(this.items, 0, this.items.length, bound, itemCompare);
     }
 
     fingerprint(begin, end) {
@@ -155,15 +155,11 @@ class NegentropyStorageVector {
 
 
 class Negentropy {
-    constructor(idSize = 16, frameSizeLimit = 0) {
-        if (idSize < 8 || idSize > 32) throw Error("idSize invalid");
+    constructor(storage, frameSizeLimit = 0) {
         if (frameSizeLimit !== 0 && frameSizeLimit < 4096) throw Error("frameSizeLimit too small");
 
-        this.idSize = idSize;
+        this.storage = storage;
         this.frameSizeLimit = frameSizeLimit;
-
-        this.addedItems = [];
-        this.pendingOutputs = [];
 
         if (typeof window === 'undefined') { // node.js
             const crypto = require('crypto');
@@ -171,41 +167,6 @@ class Negentropy {
         } else { // browser
             this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
         }
-    }
-
-    addItem(timestamp, id) {
-        if (this.sealed) throw Error("already sealed");
-        id = this._loadInputBuffer(id);
-
-        if (id.byteLength > 64 || id.byteLength < this.idSize) throw Error("bad length for id");
-        if (id.byteLength > this.idSize) id = id.subarray(0, this.idSize);
-
-        this.addedItems.push([ timestamp, id ]);
-    }
-
-    seal() {
-        if (this.sealed) throw Error("already sealed");
-        this.sealed = true;
-
-        this.addedItems.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : compareUint8Array(a[1], b[1]));
-
-        if (this.addedItems.length > 1) {
-            for (let i = 0; i < this.addedItems.length - 1; i++) {
-                if (this.addedItems[i][0] == this.addedItems[i + 1][0] &&
-                    compareUint8Array(this.addedItems[i][1], this.addedItems[i + 1][1]) === 0) throw Error("duplicate item inserted");
-            }
-        }
-
-        this.itemTimestamps = new BigUint64Array(this.addedItems.length);
-        this.itemIds = new Uint8Array(this.addedItems.length * this.idSize);
-
-        for (let i = 0; i < this.addedItems.length; i++) {
-            let item = this.addedItems[i];
-            this.itemTimestamps[i] = BigInt(item[0]);
-            this.itemIds.set(item[1], i * this.idSize);
-        }
-
-        delete this.addedItems;
     }
 
     _newState() {
@@ -252,7 +213,7 @@ class Negentropy {
         this.isInitiator = true;
         if (this.didHandshake) throw Error("can't initiate after reconcile");
 
-        await this.splitRange(0, this.numItems(), this._zeroBound(), this._maxBound(), this.pendingOutputs);
+        await this.splitRange(0, this.storage.size(), this._zeroBound(), this._maxBound(), this.pendingOutputs);
 
         return this.buildOutput(true);
     }
@@ -284,6 +245,14 @@ class Negentropy {
         }
 
         while (query.length !== 0) {
+            let doSkip = () => {
+                if (skip) {
+                    skip = false;
+                    output.extend(this.encodeBound(prevBound, state));
+                    output.extend(this.encodeVarInt(Mode.Skip));
+                }
+            };
+
             let currBound = this.decodeBound(query, state);
             let mode = this.decodeVarInt(query);
 
@@ -637,6 +606,30 @@ function itemCompare(a, b) {
     }
 
     return a.timestamp - b.timestamp;
+}
+
+
+function binarySearch(arr, first, last, cmp) {
+    let count = last - first;
+
+    while (count > 0) {
+        let it = first;
+        let step = Math.floor(count / 2);
+        it += step;
+
+        if (cmp(arr[it])) {
+            first = ++it;
+            count -= step + 1;
+        } else {
+            count = step;
+        }
+    }
+
+    return first;
+}
+
+function findLowerBound(arr, first, last, value, cmp) {
+    return binarySearch(arr, first, last, (a) => cmp(a, value) < 0);
 }
 
 
