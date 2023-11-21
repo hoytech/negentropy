@@ -40,7 +40,7 @@ struct Vector : StorageBase {
 
     void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
         checkSealed();
-        if (begin > end || end > items.size()) throw negentropy::err("bad range");
+        checkBounds(begin, end);
 
         for (auto i = begin; i < end; ++i) {
             if (!cb(items[i], i)) break;
@@ -49,7 +49,7 @@ struct Vector : StorageBase {
 
     size_t findLowerBound(size_t begin, size_t end, const Bound &bound) {
         checkSealed();
-        if (begin > end || end > items.size()) throw negentropy::err("bad range");
+        checkBounds(begin, end);
 
         return std::lower_bound(items.begin() + begin, items.begin() + end, bound.item) - items.begin();
     }
@@ -69,6 +69,10 @@ struct Vector : StorageBase {
   private:
     void checkSealed() {
         if (!sealed) throw negentropy::err("not sealed");
+    }
+
+    void checkBounds(size_t begin, size_t end) {
+        if (begin > end || end > items.size()) throw negentropy::err("bad range");
     }
 };
 

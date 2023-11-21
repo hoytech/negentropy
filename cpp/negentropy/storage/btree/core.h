@@ -279,8 +279,7 @@ struct BTreeCore : StorageBase {
     }
 
     void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) {
-        if (begin > end) throw err("begin > end");
-        if (end > size()) throw err("out of range");
+        checkBounds(begin, end);
 
         size_t num = end - begin;
 
@@ -297,7 +296,9 @@ struct BTreeCore : StorageBase {
         });
     }
 
-    size_t findLowerBound(size_t, size_t, const Bound &value) {
+    size_t findLowerBound(size_t begin, size_t end, const Bound &value) {
+        checkBounds(begin, end);
+
         auto rootNodePtr = getNodeRead(getRootNodeId());
         if (!rootNodePtr.exists()) return 0;
         auto &rootNode = rootNodePtr.get();
@@ -323,7 +324,7 @@ struct BTreeCore : StorageBase {
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {
-        if (begin > end) throw err("begin > end");
+        checkBounds(begin, end);
 
         auto getAccumLeftOf = [&](size_t index) {
             Accumulator accum;
@@ -345,6 +346,11 @@ struct BTreeCore : StorageBase {
         accum2.add(accum1);
 
         return accum2.getFingerprint(end - begin);
+    }
+
+  private:
+    void checkBounds(size_t begin, size_t end) {
+        if (begin > end || end > size()) throw negentropy::err("bad range");
     }
 };
 
