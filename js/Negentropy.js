@@ -112,8 +112,9 @@ class Accumulator {
         let po = new DataView(otherBuf.buffer);
 
         for (let i = 0; i < 8; i++) {
-            let orig = p.getUint32(i * 4, true);
-            let otherV = po.getUint32(i * 4, true);
+            let offset = i * 4;
+            let orig = p.getUint32(offset, true);
+            let otherV = po.getUint32(offset, true);
 
             let next = orig;
 
@@ -121,7 +122,7 @@ class Accumulator {
             next += otherV;
             if (next > 0xFFFFFFFF) nextCarry = 1;
 
-            p.setUint32(i * 4, next & 0xFFFFFFFF, true);
+            p.setUint32(offset, next & 0xFFFFFFFF, true);
             currCarry = nextCarry;
             nextCarry = 0;
         }
@@ -198,11 +199,7 @@ class NegentropyStorageVector {
 
     findLowerBound(bound) {
         this._checkSealed();
-        let mm = (a,b) => {
-            let z = itemCompare(a,b);
-            return z;
-        };
-        return findLowerBound(this.items, 0, this.items.length, bound, mm);
+        return this._binarySearch(this.items, 0, this.items.length, (a) => itemCompare(a, bound) < 0);
     }
 
     async fingerprint(begin, end) {
@@ -219,6 +216,25 @@ class NegentropyStorageVector {
 
     _checkSealed() {
         if (!this.sealed) throw Error("not sealed");
+    }
+
+    _binarySearch(arr, first, last, cmp) {
+        let count = last - first;
+
+        while (count > 0) {
+            let it = first;
+            let step = Math.floor(count / 2);
+            it += step;
+
+            if (cmp(arr[it])) {
+                first = ++it;
+                count -= step + 1;
+            } else {
+                count = step;
+            }
+        }
+
+        return first;
     }
 }
 
@@ -256,7 +272,7 @@ class Negentropy {
 
     async reconcile(query) {
         let haveIds = [], needIds = [];
-        query = new WrappedBuffer(this._loadInputBuffer(query));
+        query = new WrappedBuffer(loadInputBuffer(query));
 
         this.lastTimestampIn = this.lastTimestampOut = 0; // reset for each message
 
@@ -425,12 +441,6 @@ class Negentropy {
         return o;
     }
 
-    _loadInputBuffer(inp) {
-        if (typeof(inp) === 'string') inp = hexToUint8Array(inp);
-        else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp); // node Buffer?
-        return inp;
-    }
-
     // Decoding
 
     decodeTimestampIn(encoded) {
@@ -542,29 +552,6 @@ function itemCompare(a, b) {
     }
 
     return a.timestamp - b.timestamp;
-}
-
-function binarySearch(arr, first, last, cmp) {
-    let count = last - first;
-
-    while (count > 0) {
-        let it = first;
-        let step = Math.floor(count / 2);
-        it += step;
-
-        if (cmp(arr[it])) {
-            first = ++it;
-            count -= step + 1;
-        } else {
-            count = step;
-        }
-    }
-
-    return first;
-}
-
-function findLowerBound(arr, first, last, value, cmp) {
-    return binarySearch(arr, first, last, (a) => cmp(a, value) < 0);
 }
 
 
