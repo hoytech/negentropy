@@ -236,9 +236,7 @@ struct Negentropy {
         return o;
     }
 
-
     // Decoding
-
 
     uint64_t decodeTimestampIn(std::string_view &encoded, uint64_t &lastTimestampIn) {
         uint64_t timestamp = decodeVarInt(encoded);
@@ -254,7 +252,6 @@ struct Negentropy {
         auto len = decodeVarInt(encoded);
         return Bound(timestamp, getBytes(encoded, len));
     }
-
 
     // Encoding
 
@@ -282,7 +279,7 @@ struct Negentropy {
 
     Bound getMinimalBound(const Item &prev, const Item &curr) {
         if (curr.timestamp != prev.timestamp) {
-            return Bound(curr.timestamp, "");
+            return Bound(curr.timestamp);
         } else {
             uint64_t sharedPrefixBytes = 0;
             auto currKey = curr.getId();
