@@ -140,10 +140,10 @@ struct Accumulator {
             buf[i] = ~buf[i];
         }
 
-        Accumulator zero;
-        zero.setToZero();
-        zero.buf[0] = 1;
-        add(zero.buf);
+        Accumulator one;
+        one.setToZero();
+        one.buf[0] = 1;
+        add(one.buf);
     }
 
     std::string_view sv() const {
