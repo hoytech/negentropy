@@ -1,8 +1,9 @@
 deletion in btree
-test lmdb with reconcilation testing framework
+test LMDB with reconcilation testing framework
 update rust impl
 randomisation
 do edits to article
+update docs for API, how to use btree/LMDB
 
 ? coalesce Idlist ranges in buildOutput
   - at least empty ones! for example when P1=1 P2=0 P3=0
