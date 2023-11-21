@@ -297,7 +297,7 @@ struct BTreeCore : StorageBase {
         });
     }
 
-    size_t findLowerBound(const Bound &value) {
+    size_t findLowerBound(size_t, size_t, const Bound &value) {
         auto rootNodePtr = getNodeRead(getRootNodeId());
         if (!rootNodePtr.exists()) return 0;
         auto &rootNode = rootNodePtr.get();

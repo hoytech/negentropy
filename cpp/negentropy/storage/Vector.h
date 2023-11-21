@@ -47,9 +47,11 @@ struct Vector : StorageBase {
         }
     }
 
-    size_t findLowerBound(const Bound &bound) {
+    size_t findLowerBound(size_t begin, size_t end, const Bound &bound) {
         checkSealed();
-        return std::lower_bound(items.begin(), items.end(), bound.item) - items.begin();
+        if (begin > end || end > items.size()) throw negentropy::err("bad range");
+
+        return std::lower_bound(items.begin() + begin, items.begin() + end, bound.item) - items.begin();
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {

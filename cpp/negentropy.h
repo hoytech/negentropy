@@ -83,6 +83,7 @@ struct Negentropy {
             else return fullOutput;
         }
 
+        uint64_t storageSize = storage.size();
         Bound prevBound;
         size_t prevIndex = 0;
         bool skip = false;
@@ -102,7 +103,7 @@ struct Negentropy {
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
-            auto upper = storage.findLowerBound(currBound);
+            auto upper = storage.findLowerBound(prevIndex, storageSize, currBound);
 
             if (mode == Mode::Skip) {
                 skip = true;

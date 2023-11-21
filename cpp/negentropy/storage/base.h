@@ -12,7 +12,7 @@ struct StorageBase {
 
     virtual void iterate(size_t begin, size_t end, std::function<bool(const Item &, size_t)> cb) = 0;
 
-    virtual size_t findLowerBound(const Bound &value) = 0;
+    virtual size_t findLowerBound(size_t begin, size_t end, const Bound &value) = 0;
 
     virtual Fingerprint fingerprint(size_t begin, size_t end) = 0;
 };
