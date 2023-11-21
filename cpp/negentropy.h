@@ -154,7 +154,7 @@ struct Negentropy {
                     Bound endBound = currBound;
 
                     storage.iterate(lower, upper, [&](const Item &item, size_t index){
-                        if (fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
+                        if (frameSizeLimit && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
                             endBound = Bound(item);
                             upper = index; // shrink upper so that remaining range gets correct fingerprint
                             return false;
