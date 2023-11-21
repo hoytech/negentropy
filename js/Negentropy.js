@@ -1,6 +1,6 @@
 // (C) 2023 Doug Hoyte. MIT license
 
-const PROTOCOL_VERSION_0 = 0x60;
+const PROTOCOL_VERSION = 0x61; // Version 1
 const ID_SIZE = 32;
 const FINGERPRINT_SIZE = 16;
 
@@ -8,8 +8,6 @@ const Mode = {
     Skip: 0,
     Fingerprint: 1,
     IdList: 2,
-    Continuation: 3,
-    UnsupportedProtocolVersion: 4,
 };
 
 class WrappedBuffer {
@@ -167,13 +165,9 @@ class Negentropy {
         } else { // browser
             this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
         }
-    }
 
-    _newState() {
-        return {
-            lastTimestampIn: 0,
-            lastTimestampOut: 0,
-        };
+        this.lastTimestampIn = 0;
+        this.lastTimestampOut = 0;
     }
 
     _zeroBound() {
@@ -184,23 +178,6 @@ class Negentropy {
         return { timestamp: Number.MAX_VALUE, id: new Uint8Array(0) };
     }
 
-    numItems() {
-        return this.itemTimestamps.length;
-    }
-
-    getItemTimestamp(i) {
-        return Number(this.itemTimestamps[i]);
-    }
-
-    getItemId(i) {
-        let offset = i * this.idSize;
-        return this.itemIds.subarray(offset, offset + this.idSize);
-    }
-
-    getItem(i) {
-        return { timestamp: this.getItemTimestamp(i), id: this.getItemId(i), };
-    }
-
     async computeFingerprint(lower, num) {
         let offset = lower * this.idSize;
         let slice = this.itemIds.subarray(offset, offset + (num * this.idSize));
@@ -209,76 +186,78 @@ class Negentropy {
     }
 
     async initiate() {
-        if (!this.sealed) throw Error("not sealed");
+        if (this.isInitiator) throw Error("already initiated");
         this.isInitiator = true;
-        if (this.didHandshake) throw Error("can't initiate after reconcile");
 
-        await this.splitRange(0, this.storage.size(), this._zeroBound(), this._maxBound(), this.pendingOutputs);
+        let output = new WrappedBuffer();
+        output.extend([ PROTOCOL_VERSION ]);
 
-        return this.buildOutput(true);
+        await this.splitRange(0, this.storage.size(), this._zeroBound(), this._maxBound(), output);
+
+        return this.renderOutput(output);
     }
 
     async reconcile(query) {
-        query = new WrappedBuffer(this._loadInputBuffer(query));
         let haveIds = [], needIds = [];
+        query = new WrappedBuffer(this._loadInputBuffer(query));
 
-        if (!this.sealed) throw Error("not sealed");
-        this.continuationNeeded = false;
+        this.lastTimestampIn = this.lastTimestampOut = 0; // reset for each message
+
+        let fullOutput = new WrappedBuffer();
+        fullOutput.extend([ PROTOCOL_VERSION ]);
+
+        let protocolVersion = this.getBytes(query, 1);
+        if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw Error("invalid negentropy protocol version byte");
+        if (protocolVersion !== PROTOCOL_VERSION) {
+            if (this.isInitiator) throw Error("unsupported negentropy protocol version requested: " + (protocolVersion - 0x60));
+            else return this.renderOutput(fullOutput);
+        }
 
         let prevBound = this._zeroBound();
         let prevIndex = 0;
-        let state = this._newState();
-        let outputs = [];
-
-        if (!this.isInitiator && !this.didHandshake) {
-            let protocolVersion = this.getBytes(query, 1)[0];
-            if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw Error("invalid negentropy protocol version byte");
-            if (protocolVersion !== PROTOCOL_VERSION_0) {
-                let o = new WrappedBuffer();
-                o.extend(this.encodeBound({ timestamp: PROTOCOL_VERSION_0, id: new Uint8Array([]), }, state));
-                o.extend(this.encodeVarInt(Mode.UnsupportedProtocolVersion));
-                let ret = o.unwrap();
-                if (!this.wantUint8ArrayOutput) ret = uint8ArrayToHex(ret);
-                return [ret, haveIds, needIds];
-            }
-            this.didHandshake = true;
-        }
+        let skip = false;
 
         while (query.length !== 0) {
+            let o = new WrappedBuffer();
+
             let doSkip = () => {
                 if (skip) {
                     skip = false;
-                    output.extend(this.encodeBound(prevBound, state));
+                    output.extend(this.encodeBound(prevBound));
                     output.extend(this.encodeVarInt(Mode.Skip));
                 }
             };
 
-            let currBound = this.decodeBound(query, state);
+            let currBound = this.decodeBound(query);
             let mode = this.decodeVarInt(query);
 
             let lower = prevIndex;
-            let upper = this.findUpperBound(lower, this.numItems(), currBound);
+            let upper = this.storage.findLowerBound(currBound);
 
             if (mode === Mode.Skip) {
                 // Do nothing
+                skip = true;
             } else if (mode === Mode.Fingerprint) {
                 let theirFingerprint = this.getBytes(query, this.idSize);
-                let ourFingerprint = await this.computeFingerprint(lower, upper - lower);
+                let ourFingerprint = await this.storage.fingerprint(lower, upper);
 
                 if (compareUint8Array(theirFingerprint, ourFingerprint) !== 0) {
-                    await this.splitRange(lower, upper, prevBound, currBound, outputs);
+                    doSkip();
+                    await this.splitRange(lower, upper, prevBound, currBound, o);
+                } else {
+                    skip = true;
                 }
             } else if (mode === Mode.IdList) {
                 let numIds = this.decodeVarInt(query);
 
                 let theirElems = {}; // stringified Uint8Array -> original Uint8Array
                 for (let i = 0; i < numIds; i++) {
-                    let e = this.getBytes(query, this.idSize);
+                    let e = this.getBytes(query, ID_SIZE);
                     theirElems[e] = e;
                 }
 
-                for (let i = lower; i < upper; i++) {
-                    let k = this.getItemId(i);
+                this.storage.iterate(lower, upper, (item) => {
+                    let k = item.id;
 
                     if (!theirElems[k]) {
                         // ID exists on our side, but not their side
@@ -287,177 +266,106 @@ class Negentropy {
                         // ID exists on both sides
                         delete theirElems[k];
                     }
-                }
+
+                    return true;
+                });
 
                 if (this.isInitiator) {
+                    skip = true;
+
                     for (let v of Object.values(theirElems)) {
+                        // ID exists on their side, but not our side
                         needIds.push(this.wantUint8ArrayOutput ? v : uint8ArrayToHex(v));
                     }
                 } else {
-                    let responseHaveIds = [];
+                    doSkip();
 
-                    let it = lower;
-                    let didSplit = false;
-                    let splitBound = this._zeroBound();
+                    let responseIds = new WrappedBuffer();
+                    let numResponseids = 0;
+                    let endBound = currBound;
 
-                    let flushIdListOutput = () => {
-                        let payload = this.encodeVarInt(Mode.IdList);
+                    this.storage.iterate(lower, upper, (item, index) => {
+                        if (fullOutput.length + responseIds.length > this.frameSizeLimit - 200) {
+                            endBound = item;
+                            upper = index; // shrink upper so that remaining range gets correct fingerprint
+                            return false;
+                        }
 
-                        payload.extend(this.encodeVarInt(responseHaveIds.length));
-                        for (let id of responseHaveIds) payload.extend(id);
+                        responseIds.extend(item.id);
+                        numResponseids++;
+                        return true;
+                    });
 
-                        let nextSplitBound = (it+1) >= upper ? currBound : this.getMinimalBound(this.getItem(it), this.getItem(it+1));
+                    o.extend(this.encodeBound(endBound));
+                    o.extend(this.encodeVarInt(Mode.IdList));
+                    o.extend(this.encodeVarInt(numResponseIds));
+                    o.extend(responseIds);
 
-                        outputs.push({
-                            start: didSplit ? splitBound : prevBound,
-                            end: nextSplitBound,
-                            payload: payload,
-                        });
-
-                        splitBound = nextSplitBound;
-                        didSplit = true;
-
-                        responseHaveIds = [];
-                    };
-
-                    for (; it < upper; ++it) {
-                        responseHaveIds.push(this.getItemId(it));
-                        if (responseHaveIds.length >= 100) flushIdListOutput(); // 100*32 is less than minimum frame size limit of 4k
-                    }
-
-                    flushIdListOutput();
+                    fullOutput.extend(o);
+                    o = new WrappedBuffer();
                 }
-            } else if (mode === Mode.Continuation) {
-                this.continuationNeeded = true;
-            } else if (mode === Mode.UnsupportedProtocolVersion) {
-                throw Error("server does not support our negentropy protocol version");
             } else {
                 throw Error("unexpected mode");
+            }
+
+            if (this.frameSizeLimit && fullOutput.length + o.length > this.frameSizeLimit - 200) {
+                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
+                let remainingFingerprint = this.storage.fingerprint(upper, this.storage.size());
+
+                fullOutput.extend(this.encodeBound(this._maxBound()));
+                fullOutput.extend(this.encodeVarInt(Mode.Fingerprint));
+                fullOutput.extend(remainingFingerprint.sv);
+                break;
+            } else {
+                fullOutput.extend(o);
             }
 
             prevIndex = upper;
             prevBound = currBound;
         }
 
-        while (outputs.length) {
-            this.pendingOutputs.unshift(outputs.pop());
-        }
-
-        return [this.buildOutput(false), haveIds, needIds];
+        return this.renderOutput(fullOutput);
     }
 
-    async splitRange(lower, upper, lowerBound, upperBound, outputs) {
+    async splitRange(lower, upper, lowerBound, upperBound, o) {
         let numElems = upper - lower;
         let buckets = 16;
 
         if (numElems < buckets * 2) {
-            let payload = this.encodeVarInt(Mode.IdList);
-            payload.extend(this.encodeVarInt(numElems));
-            for (let it = lower; it < upper; ++it) payload.extend(this.getItemId(it));
+            o.extend(this.encodeBound(upperBound));
+            o.extend(this.encodeVarInt(Mode.IdList));
 
-            outputs.push({
-                start: lowerBound,
-                end: upperBound,
-                payload: payload,
+            o.extend(this.encodeVarInt(numElems));
+            this.storage.iterate(lower, upper, (item) => {
+                o.extend(item.id);
+                return true;
             });
         } else {
             let itemsPerBucket = Math.floor(numElems / buckets);
             let bucketsWithExtra = numElems % buckets;
             let curr = lower;
-            let prevBound = this.getItem(curr);
+            let prevBound = this.storage.getItem(curr);
 
             for (let i = 0; i < buckets; i++) {
                 let bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
-                let ourFingerprint = await this.computeFingerprint(curr, bucketSize);
+                let ourFingerprint = await this.storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                let payload = this.encodeVarInt(Mode.Fingerprint);
-                payload.extend(ourFingerprint);
+                let nextPrevBound = curr === upper ? upperBound : this.getMinimalBound(this.storage.getItem(curr - 1), this.storage.getItem(curr));
 
-                outputs.push({
-                    start: i === 0 ? lowerBound : prevBound,
-                    end: curr === upper ? upperBound : this.getMinimalBound(this.getItem(curr - 1), this.getItem(curr)),
-                    payload: payload,
-                });
+                o.extend(nextPrevBound);
+                o.extend(this.encodeVarInt(Mode.Fingerprint));
+                o.extend(ourFingerprint);
 
-                prevBound = outputs[outputs.length - 1].end;
+                prevBound = nextPrevBound;
             }
-
-            outputs[outputs.length - 1].end = upperBound;
         }
     }
 
-    buildOutput(initialMessage) {
-        let output = new WrappedBuffer();
-        let currBound = this._zeroBound();
-        let state = this._newState();
-
-        if (initialMessage) {
-            if (this.didHandshake) throw Error("already built initial message");
-            output.extend([ PROTOCOL_VERSION_0 ]);
-            this.didHandshake = true;
-        }
-
-        this.pendingOutputs.sort((a,b) => itemCompare(a.start, b.start));
-
-        while (this.pendingOutputs.length) {
-            let o = new WrappedBuffer();
-
-            let p = this.pendingOutputs[0];
-
-            let cmp = itemCompare(p.start, currBound);
-            // If bounds are out of order or overlapping, finish and resume next time (shouldn't happen because of sort above)
-            if (cmp < 0) break;
-
-            if (cmp !== 0) {
-                o.extend(this.encodeBound(p.start, state));
-                o.extend(this.encodeVarInt(Mode.Skip));
-            }
-
-            o.extend(this.encodeBound(p.end, state));
-            o.extend(p.payload);
-
-            if (this.frameSizeLimit && output.length + o.length > this.frameSizeLimit - 5) break; // 5 leaves room for Continuation
-            output.extend(o);
-
-            currBound = p.end;
-            this.pendingOutputs.shift();
-
-        }
-
-        // Server indicates that it has more to send, OR ensure client sends a non-empty message
-
-        if (!this.isInitiator && this.pendingOutputs.length) {
-            output.extend(this.encodeBound(this._maxBound(), state));
-            output.extend(this.encodeVarInt(Mode.Continuation));
-        }
-
-        if (this.isInitiator && output.length === 0 && !this.continuationNeeded) {
-            return null;
-        }
-
-        let ret = output.unwrap();
-        if (!this.wantUint8ArrayOutput) ret = uint8ArrayToHex(ret);
-        return ret;
-    }
-
-    findUpperBound(first, last, value) {
-        let count = last - first;
-
-        while (count > 0) {
-            let it = first;
-            let step = Math.floor(count / 2);
-            it += step;
-
-            if (!(value.timestamp === this.getItemTimestamp(it) ? compareUint8Array(value.id, this.getItemId(it)) < 0 : value.timestamp < this.getItemTimestamp(it))) {
-                first = ++it;
-                count -= step + 1;
-            } else {
-                count = step;
-            }
-        }
-
-        return first;
+    renderOutput(o) {
+        let o = output.unwrap();
+        if (!this.wantUint8ArrayOutput) o = uint8ArrayToHex(o);
+        return o;
     }
 
     // Decoding
@@ -480,20 +388,20 @@ class Negentropy {
         return res;
     }
 
-    decodeTimestampIn(encoded, state) {
+    decodeTimestampIn(encoded) {
         let timestamp = this.decodeVarInt(encoded);
         timestamp = timestamp === 0 ? Number.MAX_VALUE : timestamp - 1;
-        if (state.lastTimestampIn === Number.MAX_VALUE || timestamp === Number.MAX_VALUE) {
-            state.lastTimestampIn = Number.MAX_VALUE;
+        if (this.lastTimestampIn === Number.MAX_VALUE || timestamp === Number.MAX_VALUE) {
+            this.lastTimestampIn = Number.MAX_VALUE;
             return Number.MAX_VALUE;
         }
-        timestamp += state.lastTimestampIn;
-        state.lastTimestampIn = timestamp;
+        timestamp += this.lastTimestampIn;
+        this.lastTimestampIn = timestamp;
         return timestamp;
     }
 
-    decodeBound(encoded, state) {
-        let timestamp = this.decodeTimestampIn(encoded, state);
+    decodeBound(encoded) {
+        let timestamp = this.decodeTimestampIn(encoded);
         let len = this.decodeVarInt(encoded);
         if (len > this.idSize) throw Error("bound key too long");
         let id = this.getBytes(encoded, len);
@@ -519,22 +427,22 @@ class Negentropy {
         return new WrappedBuffer(o);
     }
 
-    encodeTimestampOut(timestamp, state) {
+    encodeTimestampOut(timestamp) {
         if (timestamp === Number.MAX_VALUE) {
-            state.lastTimestampOut = Number.MAX_VALUE;
+            this.lastTimestampOut = Number.MAX_VALUE;
             return this.encodeVarInt(0);
         }
 
         let temp = timestamp;
-        timestamp -= state.lastTimestampOut;
-        state.lastTimestampOut = temp;
+        timestamp -= this.lastTimestampOut;
+        this.lastTimestampOut = temp;
         return this.encodeVarInt(timestamp + 1);
     }
 
-    encodeBound(key, state) {
+    encodeBound(key) {
         let output = new WrappedBuffer();
 
-        output.extend(this.encodeTimestampOut(key.timestamp, state));
+        output.extend(this.encodeTimestampOut(key.timestamp));
         output.extend(this.encodeVarInt(key.id.length));
         output.extend(key.id);
 
@@ -606,30 +514,6 @@ function itemCompare(a, b) {
     }
 
     return a.timestamp - b.timestamp;
-}
-
-
-function binarySearch(arr, first, last, cmp) {
-    let count = last - first;
-
-    while (count > 0) {
-        let it = first;
-        let step = Math.floor(count / 2);
-        it += step;
-
-        if (cmp(arr[it])) {
-            first = ++it;
-            count -= step + 1;
-        } else {
-            count = step;
-        }
-    }
-
-    return first;
-}
-
-function findLowerBound(arr, first, last, value, cmp) {
-    return binarySearch(arr, first, last, (a) => cmp(a, value) < 0);
 }
 
 
