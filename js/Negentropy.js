@@ -53,10 +53,52 @@ class WrappedBuffer {
     }
 }
 
+function decodeVarInt(buf) {
+    let res = 0;
+
+    while (1) {
+        if (buf.length === 0) throw Error("parse ends prematurely");
+        let byte = buf.shift();
+        res = (res << 7) | (byte & 127);
+        if ((byte & 128) === 0) break;
+    }
+
+    return res;
+}
+
+function encodeVarInt(n) {
+    if (n === 0) return new WrappedBuffer([0]);
+
+    let o = [];
+
+    while (n !== 0) {
+        o.push(n & 127);
+        n >>>= 7;
+    }
+
+    o.reverse();
+
+    for (let i = 0; i < o.length - 1; i++) o[i] |= 128;
+
+    return new WrappedBuffer(o);
+}
+
+function getBytes(buf, n) {
+    if (buf.length < n) throw Error("parse ends prematurely");
+    return buf.shiftN(n);
+}
+
 
 class Accumulator {
     constructor() {
         this.setToZero();
+
+        if (typeof window === 'undefined') { // node.js
+            const crypto = require('crypto');
+            this.sha256 = async (slice) => new Uint8Array(crypto.createHash('sha256').update(slice).digest());
+        } else { // browser
+            this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
+        }
     }
 
     setToZero() {
@@ -83,6 +125,29 @@ class Accumulator {
             nextCarry = 0;
         }
     }
+
+    negate() {
+        let p = new DataView(this.buf.buffer);
+
+        for (let i = 0; i < 8; i++) {
+            let offset = i * 4;
+            p.setUint32(offset, ~p.getUint32(offset, true));
+        }
+
+        let one = new Uint8Array(ID_SIZE);
+        one[0] = 1;
+        this.add(one);
+    }
+
+    async getFingerprint(n) {
+        let input = new WrappedBuffer();
+        input.extend(this.buf);
+        input.extend(encodeVarInt(n));
+
+        let hash = await this.sha256(input.unwrap());
+
+        return hash.subarray(0, FINGERPRINT_SIZE);
+    }
 };
 
 
@@ -96,7 +161,7 @@ class NegentropyStorageVector {
         if (this.sealed) throw Error("already sealed");
         id = loadInputBuffer(id);
         if (id.byteLength !== ID_SIZE) throw Error("bad id size for added item");
-        this.addedItems.push([ timestamp, id ]);
+        this.items.push([ timestamp, id ]);
     }
 
     seal() {
@@ -106,7 +171,7 @@ class NegentropyStorageVector {
         this.items.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : compareUint8Array(a[1], b[1]));
 
         for (let i = 1; i < this.items.length; i++) {
-            if (this.items[i - 1][0] == this.items[i][0] && this.items[i - 1][1] == this.items[i][1]) throw negentropy::err("duplicate item inserted");
+            if (this.items[i - 1][0] == this.items[i][0] && this.items[i - 1][1] == this.items[i][1]) throw Error("duplicate item inserted");
         }
     }
 
@@ -117,7 +182,8 @@ class NegentropyStorageVector {
 
     getItem(i) {
         this._checkSealed();
-        return this.items[i];
+        if (i >= this.items.length) throw Error("out of range");
+        return { timestamp: this.items[i][0], id: this.items[i][1], };
     }
 
     iterate(begin, end, cb) {
@@ -134,16 +200,16 @@ class NegentropyStorageVector {
         return findLowerBound(this.items, 0, this.items.length, bound, itemCompare);
     }
 
-    fingerprint(begin, end) {
+    async fingerprint(begin, end) {
         let out = new Accumulator();
         out.setToZero();
 
-        iterate(begin, end, (item, i) => {
+        this.iterate(begin, end, (item, i) => {
             out.add(item[1]);
             return true;
         });
 
-        return out.getFingerprint(end - begin);
+        return await out.getFingerprint(end - begin);
     }
 
     _checkSealed() {
@@ -159,30 +225,16 @@ class Negentropy {
         this.storage = storage;
         this.frameSizeLimit = frameSizeLimit;
 
-        if (typeof window === 'undefined') { // node.js
-            const crypto = require('crypto');
-            this.sha256 = async (slice) => new Uint8Array(crypto.createHash('sha256').update(slice).digest());
-        } else { // browser
-            this.sha256 = async (slice) => new Uint8Array(await crypto.subtle.digest("SHA-256", slice));
-        }
-
         this.lastTimestampIn = 0;
         this.lastTimestampOut = 0;
     }
 
     _zeroBound() {
-        return { timestamp: 0, id: new Uint8Array(this.idSize) };
+        return { timestamp: 0, id: new Uint8Array(0) };
     }
 
     _maxBound() {
         return { timestamp: Number.MAX_VALUE, id: new Uint8Array(0) };
-    }
-
-    async computeFingerprint(lower, num) {
-        let offset = lower * this.idSize;
-        let slice = this.itemIds.subarray(offset, offset + (num * this.idSize));
-        let output = await this.sha256(slice);
-        return output.subarray(0, this.idSize);
     }
 
     async initiate() {
@@ -194,7 +246,7 @@ class Negentropy {
 
         await this.splitRange(0, this.storage.size(), this._zeroBound(), this._maxBound(), output);
 
-        return this.renderOutput(output);
+        return this._renderOutput(output);
     }
 
     async reconcile(query) {
@@ -206,11 +258,11 @@ class Negentropy {
         let fullOutput = new WrappedBuffer();
         fullOutput.extend([ PROTOCOL_VERSION ]);
 
-        let protocolVersion = this.getBytes(query, 1);
+        let protocolVersion = getBytes(query, 1)[0];
         if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw Error("invalid negentropy protocol version byte");
         if (protocolVersion !== PROTOCOL_VERSION) {
             if (this.isInitiator) throw Error("unsupported negentropy protocol version requested: " + (protocolVersion - 0x60));
-            else return this.renderOutput(fullOutput);
+            else return [this._renderOutput(fullOutput), haveIds, needIds];
         }
 
         let prevBound = this._zeroBound();
@@ -224,12 +276,12 @@ class Negentropy {
                 if (skip) {
                     skip = false;
                     output.extend(this.encodeBound(prevBound));
-                    output.extend(this.encodeVarInt(Mode.Skip));
+                    output.extend(encodeVarInt(Mode.Skip));
                 }
             };
 
             let currBound = this.decodeBound(query);
-            let mode = this.decodeVarInt(query);
+            let mode = decodeVarInt(query);
 
             let lower = prevIndex;
             let upper = this.storage.findLowerBound(currBound);
@@ -238,7 +290,7 @@ class Negentropy {
                 // Do nothing
                 skip = true;
             } else if (mode === Mode.Fingerprint) {
-                let theirFingerprint = this.getBytes(query, this.idSize);
+                let theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
                 let ourFingerprint = await this.storage.fingerprint(lower, upper);
 
                 if (compareUint8Array(theirFingerprint, ourFingerprint) !== 0) {
@@ -248,11 +300,11 @@ class Negentropy {
                     skip = true;
                 }
             } else if (mode === Mode.IdList) {
-                let numIds = this.decodeVarInt(query);
+                let numIds = decodeVarInt(query);
 
                 let theirElems = {}; // stringified Uint8Array -> original Uint8Array
                 for (let i = 0; i < numIds; i++) {
-                    let e = this.getBytes(query, ID_SIZE);
+                    let e = getBytes(query, ID_SIZE);
                     theirElems[e] = e;
                 }
 
@@ -261,6 +313,7 @@ class Negentropy {
 
                     if (!theirElems[k]) {
                         // ID exists on our side, but not their side
+                        console.error("DING",uint8ArrayToHex(k));
                         if (this.isInitiator) haveIds.push(this.wantUint8ArrayOutput ? k : uint8ArrayToHex(k));
                     } else {
                         // ID exists on both sides
@@ -297,8 +350,8 @@ class Negentropy {
                     });
 
                     o.extend(this.encodeBound(endBound));
-                    o.extend(this.encodeVarInt(Mode.IdList));
-                    o.extend(this.encodeVarInt(numResponseIds));
+                    o.extend(encodeVarInt(Mode.IdList));
+                    o.extend(encodeVarInt(numResponseIds));
                     o.extend(responseIds);
 
                     fullOutput.extend(o);
@@ -313,8 +366,8 @@ class Negentropy {
                 let remainingFingerprint = this.storage.fingerprint(upper, this.storage.size());
 
                 fullOutput.extend(this.encodeBound(this._maxBound()));
-                fullOutput.extend(this.encodeVarInt(Mode.Fingerprint));
-                fullOutput.extend(remainingFingerprint.sv);
+                fullOutput.extend(encodeVarInt(Mode.Fingerprint));
+                fullOutput.extend(remainingFingerprint);
                 break;
             } else {
                 fullOutput.extend(o);
@@ -324,7 +377,7 @@ class Negentropy {
             prevBound = currBound;
         }
 
-        return this.renderOutput(fullOutput);
+        return [fullOutput.length === 1 ? null : this._renderOutput(fullOutput), haveIds, needIds];
     }
 
     async splitRange(lower, upper, lowerBound, upperBound, o) {
@@ -333,9 +386,9 @@ class Negentropy {
 
         if (numElems < buckets * 2) {
             o.extend(this.encodeBound(upperBound));
-            o.extend(this.encodeVarInt(Mode.IdList));
+            o.extend(encodeVarInt(Mode.IdList));
 
-            o.extend(this.encodeVarInt(numElems));
+            o.extend(encodeVarInt(numElems));
             this.storage.iterate(lower, upper, (item) => {
                 o.extend(item.id);
                 return true;
@@ -353,8 +406,8 @@ class Negentropy {
 
                 let nextPrevBound = curr === upper ? upperBound : this.getMinimalBound(this.storage.getItem(curr - 1), this.storage.getItem(curr));
 
-                o.extend(nextPrevBound);
-                o.extend(this.encodeVarInt(Mode.Fingerprint));
+                o.extend(this.encodeBound(nextPrevBound));
+                o.extend(encodeVarInt(Mode.Fingerprint));
                 o.extend(ourFingerprint);
 
                 prevBound = nextPrevBound;
@@ -362,34 +415,22 @@ class Negentropy {
         }
     }
 
-    renderOutput(o) {
-        let o = output.unwrap();
+    _renderOutput(o) {
+        o = o.unwrap();
         if (!this.wantUint8ArrayOutput) o = uint8ArrayToHex(o);
         return o;
     }
 
+    _loadInputBuffer(inp) {
+        if (typeof(inp) === 'string') inp = hexToUint8Array(inp);
+        else if (__proto__ !== Uint8Array.prototype) inp = new Uint8Array(inp); // node Buffer?
+        return inp;
+    }
+
     // Decoding
 
-    getBytes(buf, n) {
-        if (buf.length < n) throw Error("parse ends prematurely");
-        return buf.shiftN(n);
-    }
-
-    decodeVarInt(buf) {
-        let res = 0;
-
-        while (1) {
-            if (buf.length === 0) throw Error("parse ends prematurely");
-            let byte = buf.shift();
-            res = (res << 7) | (byte & 127);
-            if ((byte & 128) === 0) break;
-        }
-
-        return res;
-    }
-
     decodeTimestampIn(encoded) {
-        let timestamp = this.decodeVarInt(encoded);
+        let timestamp = decodeVarInt(encoded);
         timestamp = timestamp === 0 ? Number.MAX_VALUE : timestamp - 1;
         if (this.lastTimestampIn === Number.MAX_VALUE || timestamp === Number.MAX_VALUE) {
             this.lastTimestampIn = Number.MAX_VALUE;
@@ -402,48 +443,31 @@ class Negentropy {
 
     decodeBound(encoded) {
         let timestamp = this.decodeTimestampIn(encoded);
-        let len = this.decodeVarInt(encoded);
-        if (len > this.idSize) throw Error("bound key too long");
-        let id = this.getBytes(encoded, len);
+        let len = decodeVarInt(encoded);
+        if (len > ID_SIZE) throw Error("bound key too long");
+        let id = getBytes(encoded, len);
         return { timestamp, id };
     }
 
     // Encoding
 
-    encodeVarInt(n) {
-        if (n === 0) return new WrappedBuffer([0]);
-
-        let o = [];
-
-        while (n !== 0) {
-            o.push(n & 127);
-            n >>>= 7;
-        }
-
-        o.reverse();
-
-        for (let i = 0; i < o.length - 1; i++) o[i] |= 128;
-
-        return new WrappedBuffer(o);
-    }
-
     encodeTimestampOut(timestamp) {
         if (timestamp === Number.MAX_VALUE) {
             this.lastTimestampOut = Number.MAX_VALUE;
-            return this.encodeVarInt(0);
+            return encodeVarInt(0);
         }
 
         let temp = timestamp;
         timestamp -= this.lastTimestampOut;
         this.lastTimestampOut = temp;
-        return this.encodeVarInt(timestamp + 1);
+        return encodeVarInt(timestamp + 1);
     }
 
     encodeBound(key) {
         let output = new WrappedBuffer();
 
         output.extend(this.encodeTimestampOut(key.timestamp));
-        output.extend(this.encodeVarInt(key.id.length));
+        output.extend(encodeVarInt(key.id.length));
         output.extend(key.id);
 
         return output;
@@ -455,7 +479,7 @@ class Negentropy {
         } else {
             let sharedPrefixBytes = 0;
 
-            for (let i = 0; i < this.idSize; i++) {
+            for (let i = 0; i < ID_SIZE; i++) {
                 if (curr.id[i] !== prev.id[i]) break;
                 sharedPrefixBytes++;
             }
@@ -516,5 +540,28 @@ function itemCompare(a, b) {
     return a.timestamp - b.timestamp;
 }
 
+function binarySearch(arr, first, last, cmp) {
+    let count = last - first;
 
-module.exports = Negentropy;
+    while (count > 0) {
+        let it = first;
+        let step = Math.floor(count / 2);
+        it += step;
+
+        if (cmp(arr[it])) {
+            first = ++it;
+            count -= step + 1;
+        } else {
+            count = step;
+        }
+    }
+
+    return first;
+}
+
+function findLowerBound(arr, first, last, value, cmp) {
+    return binarySearch(arr, first, last, (a) => cmp(a, value) < 0);
+}
+
+
+module.exports = { Negentropy, NegentropyStorageVector, };
