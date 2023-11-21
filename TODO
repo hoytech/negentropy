@@ -1,6 +1,5 @@
-measure best choice for btree branching factor
 support deletion in btree
-update JS and rust impls
+update rust impl
 do edits to article
 
 randomisation
