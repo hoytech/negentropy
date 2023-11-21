@@ -12,7 +12,7 @@ const Mode = {
 
 class WrappedBuffer {
     constructor(buffer) {
-        this._raw = new Uint8Array(buffer || 256);
+        this._raw = new Uint8Array(buffer || 512);
         this.length = buffer ? buffer.length : 0;
     }
 
@@ -82,6 +82,10 @@ function encodeVarInt(n) {
     for (let i = 0; i < o.length - 1; i++) o[i] |= 128;
 
     return new WrappedBuffer(o);
+}
+
+function getByte(buf) {
+    return getBytes(buf, 1)[0];
 }
 
 function getBytes(buf, n) {
@@ -256,12 +260,8 @@ class Negentropy {
         this.lastTimestampOut = 0;
     }
 
-    _zeroBound() {
-        return { timestamp: 0, id: new Uint8Array(0) };
-    }
-
-    _maxBound() {
-        return { timestamp: Number.MAX_VALUE, id: new Uint8Array(0) };
+    _bound(timestamp, id) {
+        return { timestamp, id: id ? id : new Uint8Array(0) };
     }
 
     async initiate() {
@@ -271,7 +271,7 @@ class Negentropy {
         let output = new WrappedBuffer();
         output.extend([ PROTOCOL_VERSION ]);
 
-        await this.splitRange(0, this.storage.size(), this._zeroBound(), this._maxBound(), output);
+        await this.splitRange(0, this.storage.size(), this._bound(0), this._bound(Number.MAX_VALUE), output);
 
         return this._renderOutput(output);
     }
@@ -285,7 +285,7 @@ class Negentropy {
         let fullOutput = new WrappedBuffer();
         fullOutput.extend([ PROTOCOL_VERSION ]);
 
-        let protocolVersion = getBytes(query, 1)[0];
+        let protocolVersion = getByte(query);
         if (protocolVersion < 0x60 || protocolVersion > 0x6F) throw Error("invalid negentropy protocol version byte");
         if (protocolVersion !== PROTOCOL_VERSION) {
             if (this.isInitiator) throw Error("unsupported negentropy protocol version requested: " + (protocolVersion - 0x60));
@@ -293,7 +293,7 @@ class Negentropy {
         }
 
         let storageSize = this.storage.size();
-        let prevBound = this._zeroBound();
+        let prevBound = this._bound(0);
         let prevIndex = 0;
         let skip = false;
 
@@ -315,7 +315,6 @@ class Negentropy {
             let upper = this.storage.findLowerBound(prevIndex, storageSize, currBound);
 
             if (mode === Mode.Skip) {
-                // Do nothing
                 skip = true;
             } else if (mode === Mode.Fingerprint) {
                 let theirFingerprint = getBytes(query, FINGERPRINT_SIZE);
@@ -330,7 +329,7 @@ class Negentropy {
             } else if (mode === Mode.IdList) {
                 let numIds = decodeVarInt(query);
 
-                let theirElems = {}; // stringified Uint8Array -> original Uint8Array
+                let theirElems = {}; // stringified Uint8Array -> original Uint8Array (or hex)
                 for (let i = 0; i < numIds; i++) {
                     let e = getBytes(query, ID_SIZE);
                     theirElems[e] = e;
@@ -392,7 +391,7 @@ class Negentropy {
                 // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
                 let remainingFingerprint = await this.storage.fingerprint(upper, this.storage.size());
 
-                fullOutput.extend(this.encodeBound(this._maxBound()));
+                fullOutput.extend(this.encodeBound(this._bound(Number.MAX_VALUE)));
                 fullOutput.extend(encodeVarInt(Mode.Fingerprint));
                 fullOutput.extend(remainingFingerprint);
                 break;
@@ -496,16 +495,18 @@ class Negentropy {
 
     getMinimalBound(prev, curr) {
         if (curr.timestamp !== prev.timestamp) {
-            return { timestamp: curr.timestamp, id: new Uint8Array(0), };
+            return this._bound(curr.timestamp);
         } else {
             let sharedPrefixBytes = 0;
+            let currKey = curr.id;
+            let prevKey = prev.id;
 
             for (let i = 0; i < ID_SIZE; i++) {
-                if (curr.id[i] !== prev.id[i]) break;
+                if (currKey[i] !== prevKey[i]) break;
                 sharedPrefixBytes++;
             }
 
-            return { timestamp: curr.timestamp, id: curr.id.subarray(0, sharedPrefixBytes + 1), };
+            return this._bound(curr.timestamp, curr.id.subarray(0, sharedPrefixBytes + 1));
         }
     };
 }
