@@ -190,16 +190,18 @@ class NegentropyStorageVector {
 
     iterate(begin, end, cb) {
         this._checkSealed();
-        if (begin > end || end > this.items.length) throw Error("bad range");
+        this._checkBounds(begin, end);
 
         for (let i = begin; i < end; ++i) {
             if (!cb(this.items[i], i)) break;
         }
     }
 
-    findLowerBound(bound) {
+    findLowerBound(begin, end, bound) {
         this._checkSealed();
-        return this._binarySearch(this.items, 0, this.items.length, (a) => itemCompare(a, bound) < 0);
+        this._checkBounds(begin, end);
+
+        return this._binarySearch(this.items, begin, end, (a) => itemCompare(a, bound) < 0);
     }
 
     async fingerprint(begin, end) {
@@ -216,6 +218,10 @@ class NegentropyStorageVector {
 
     _checkSealed() {
         if (!this.sealed) throw Error("not sealed");
+    }
+
+    _checkBounds(begin, end) {
+        if (begin > end || end > this.items.length) throw Error("bad range");
     }
 
     _binarySearch(arr, first, last, cmp) {
@@ -286,6 +292,7 @@ class Negentropy {
             else return [this._renderOutput(fullOutput), haveIds, needIds];
         }
 
+        let storageSize = this.storage.size();
         let prevBound = this._zeroBound();
         let prevIndex = 0;
         let skip = false;
@@ -305,7 +312,7 @@ class Negentropy {
             let mode = decodeVarInt(query);
 
             let lower = prevIndex;
-            let upper = this.storage.findLowerBound(currBound);
+            let upper = this.storage.findLowerBound(prevIndex, storageSize, currBound);
 
             if (mode === Mode.Skip) {
                 // Do nothing
