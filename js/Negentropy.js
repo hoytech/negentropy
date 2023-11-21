@@ -342,7 +342,7 @@ class Negentropy {
                     let endBound = currBound;
 
                     this.storage.iterate(lower, upper, (item, index) => {
-                        if (fullOutput.length + responseIds.length > this.frameSizeLimit - 200) {
+                        if (this.frameSizeLimit && fullOutput.length + responseIds.length > this.frameSizeLimit - 200) {
                             endBound = item;
                             upper = index; // shrink upper so that remaining range gets correct fingerprint
                             return false;
