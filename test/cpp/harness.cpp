@@ -29,7 +29,7 @@ int main() {
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    negentropy::storage::Vector storage;
+    negentropy::storage::BTreeMem storage;
     std::unique_ptr<Negentropy> ne;
 
     std::string line;

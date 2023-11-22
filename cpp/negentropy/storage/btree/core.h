@@ -20,13 +20,13 @@ inline bool operator<(const Key &a, const Key &b) {
 };
 
 struct Node {
-    uint64_t nextLeaf;
-
-    uint64_t numItems;
-    Key items[MAX_ITEMS + 1];
+    uint64_t numItems; // Number of items in this Node
+    uint64_t accumCount; // Total number of items in or under this Node
+    uint64_t nextLeaf; // Pointer to next leaf in this level
 
     Accumulator accum;
-    uint64_t accumCount;
+
+    Key items[MAX_ITEMS + 1];
 
     Node() {
         memset((void*)this, '\0', sizeof(*this));

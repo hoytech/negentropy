@@ -42,7 +42,7 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
     auto nodePtr = btree.getNodeRead(nodeId);
     auto &node = nodePtr.get();
 
-    if (node.numItems < MIN_ITEMS) throw err("verify: too few items");
+    if (depth > 0 && node.numItems < MIN_ITEMS) throw err("verify: too few items");
     if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
     if (node.items[0].nodeId == 0) {
