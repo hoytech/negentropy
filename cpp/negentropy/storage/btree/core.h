@@ -7,8 +7,10 @@ namespace negentropy { namespace storage { namespace btree {
 
 using err = std::runtime_error;
 
-const size_t MIN_ITEMS = 30;
-const size_t MAX_ITEMS = 80;
+//const size_t MIN_ITEMS = 30;
+//const size_t MAX_ITEMS = 80;
+const size_t MIN_ITEMS = 2;
+const size_t MAX_ITEMS = 6;
 
 struct Key {
     Item item;
@@ -50,6 +52,11 @@ struct NodePtr {
     }
 };
 
+struct Breadcrumb {
+    size_t index;
+    NodePtr nodePtr;
+};
+
 
 struct BTreeCore : StorageBase {
     //// Node Storage
@@ -65,6 +72,36 @@ struct BTreeCore : StorageBase {
     virtual uint64_t getRootNodeId() = 0;
 
     virtual void setRootNodeId(uint64_t newRootNodeId) = 0;
+
+
+    //// Search
+
+    std::vector<Breadcrumb> searchItem(uint64_t rootNodeId, const Item &newItem, bool &found) {
+        std::vector<Breadcrumb> breadcrumbs;
+
+        auto foundNode = getNodeRead(rootNodeId);
+
+        while (foundNode.nodeId) {
+            const auto &node = foundNode.get();
+            size_t index = node.numItems - 1;
+
+            if (node.numItems > 1) {
+                for (size_t i = 1; i < node.numItems + 1; i++) {
+                    if (i == node.numItems + 1 || newItem < node.items[i].item) {
+                        index = i - 1;
+                        break;
+                    }
+                }
+            }
+
+            if (!found && (newItem == node.items[index].item)) found = true;
+
+            breadcrumbs.push_back({index, foundNode});
+            foundNode = getNodeRead(node.items[index].nodeId);
+        }
+
+        return breadcrumbs;
+    }
 
 
     //// Insertion
@@ -90,35 +127,12 @@ struct BTreeCore : StorageBase {
 
         // Traverse interior nodes, leaving breadcrumbs along the way
 
-        struct Breadcrumb {
-            size_t index;
-            NodePtr nodePtr;
-        };
 
-        std::vector<Breadcrumb> breadcrumbs;
+        bool found;
+        auto breadcrumbs = searchItem(rootNodeId, newItem, found);
 
-        {
-            auto foundNode = getNodeRead(rootNodeId);
+        if (found) throw err("already inserted");
 
-            while (foundNode.nodeId) {
-                const auto &node = foundNode.get();
-                size_t index = node.numItems - 1;
-
-                if (node.numItems > 1) {
-                    for (size_t i = 1; i < node.numItems + 1; i++) {
-                        if (i == node.numItems + 1 || newItem < node.items[i].item) {
-                            index = i - 1;
-                            break;
-                        }
-                    }
-                }
-
-                if (newItem == node.items[index].item) throw err("already inserted");
-
-                breadcrumbs.push_back({index, foundNode});
-                foundNode = getNodeRead(node.items[index].nodeId);
-            }
-        }
 
         // Follow breadcrumbs back to root
 
@@ -208,6 +222,52 @@ struct BTreeCore : StorageBase {
             newRoot.items[1].nodeId = newKey.nodeId;
 
             setRootNodeId(newRootPtr.nodeId);
+        }
+    }
+
+    void remove(const Item &oldItem) {
+        auto rootNodeId = getRootNodeId();
+        if (!rootNodeId) throw err("not found");
+
+
+        // Traverse interior nodes, leaving breadcrumbs along the way
+
+        bool found;
+        auto breadcrumbs = searchItem(rootNodeId, newItem, found);
+
+        if (!found) throw err("not found");
+
+
+        // Remove from node
+
+        bool needsMerge = true;
+        bool needsRebalance = false;
+
+        while (breadcrumbs.size()) {
+            auto crumb = breadcrumbs.back();
+            breadcrumbs.pop_back();
+
+            if (needsRebalance) {
+                // Find neighbour of index, rebalance or delete
+            } else if (!needsMerge) {
+                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+                node.accum.sub(oldItem.id);
+                node.accumCount--;
+            } else {
+                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+
+                for (size_t i = crumb.index + 1; i < node.numItems; i++) node.items[i - 1] = node.items[i];
+                node.numItems--;
+
+                node.accum.sub(newItem.id);
+                node.accumCount--;
+
+                if (node.numItems < MIN_ITEMS) {
+                    needsRebalance = true;
+                } else {
+                    needsMerge = false;
+                }
+            }
         }
     }
 
