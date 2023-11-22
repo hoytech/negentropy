@@ -146,6 +146,13 @@ struct Accumulator {
         add(one.buf);
     }
 
+    void sub(const Item &item) {
+        Accumulator neg;
+        memcpy(buf, item.buf, ID_SIZE);
+        neg.negate();
+        add(neg);
+    }
+
     std::string_view sv() const {
         return std::string_view(reinterpret_cast<const char*>(buf), sizeof(buf));
     }
