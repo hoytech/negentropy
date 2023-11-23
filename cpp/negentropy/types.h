@@ -148,7 +148,7 @@ struct Accumulator {
 
     void sub(const Item &item) {
         Accumulator neg;
-        memcpy(buf, item.buf, ID_SIZE);
+        memcpy(neg.buf, item.id, sizeof(buf));
         neg.negate();
         add(neg);
     }

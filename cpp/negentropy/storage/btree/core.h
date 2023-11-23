@@ -10,6 +10,7 @@ using err = std::runtime_error;
 //const size_t MIN_ITEMS = 30;
 //const size_t MAX_ITEMS = 80;
 const size_t MIN_ITEMS = 2;
+const size_t MAX_JOIN = 4;
 const size_t MAX_ITEMS = 6;
 
 struct Key {
@@ -25,6 +26,7 @@ struct Node {
     uint64_t numItems; // Number of items in this Node
     uint64_t accumCount; // Total number of items in or under this Node
     uint64_t nextLeaf; // Pointer to next leaf in this level
+    uint64_t prevLeaf; // Pointer to previous leaf in this level
 
     Accumulator accum;
 
@@ -117,7 +119,7 @@ struct BTreeCore : StorageBase {
 
             newNode.items[0].item = newItem;
             newNode.numItems++;
-            newNode.accum.add(newItem.id);
+            newNode.accum.add(newItem);
             newNode.accumCount = 1;
 
             setRootNodeId(newNodePtr.nodeId);
@@ -145,7 +147,7 @@ struct BTreeCore : StorageBase {
 
             if (!needsMerge) {
                 auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
-                node.accum.add(newItem.id);
+                node.accum.add(newItem);
                 node.accumCount++;
             } else if (crumb.nodePtr.get().numItems < MAX_ITEMS) {
                 // Happy path: Node has room for new item
@@ -155,7 +157,7 @@ struct BTreeCore : StorageBase {
                 std::inplace_merge(node.items, node.items + node.numItems, node.items + node.numItems + 1);
                 node.numItems++;
 
-                node.accum.add(newItem.id);
+                node.accum.add(newItem);
                 node.accumCount++;
 
                 needsMerge = false;
@@ -186,6 +188,7 @@ struct BTreeCore : StorageBase {
 
                 right.nextLeaf = left.nextLeaf;
                 left.nextLeaf = rightPtr.nodeId;
+                right.prevLeaf = crumb.nodePtr.nodeId;
 
                 newKey = { right.items[0].item, rightPtr.nodeId };
             }
@@ -225,7 +228,7 @@ struct BTreeCore : StorageBase {
         }
     }
 
-    void remove(const Item &oldItem) {
+    void erase(const Item &oldItem) {
         auto rootNodeId = getRootNodeId();
         if (!rootNodeId) throw err("not found");
 
@@ -233,39 +236,88 @@ struct BTreeCore : StorageBase {
         // Traverse interior nodes, leaving breadcrumbs along the way
 
         bool found;
-        auto breadcrumbs = searchItem(rootNodeId, newItem, found);
-
+        auto breadcrumbs = searchItem(rootNodeId, oldItem, found);
         if (!found) throw err("not found");
 
 
         // Remove from node
 
-        bool needsMerge = true;
-        bool needsRebalance = false;
+        bool needsRemove = true;
 
         while (breadcrumbs.size()) {
             auto crumb = breadcrumbs.back();
             breadcrumbs.pop_back();
 
-            if (needsRebalance) {
-                // Find neighbour of index, rebalance or delete
-            } else if (!needsMerge) {
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
-                node.accum.sub(oldItem.id);
+            auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+
+std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " << crumb.index << std::endl;
+            if (!needsRemove) {
+                node.accum.sub(oldItem);
                 node.accumCount--;
             } else {
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
-
                 for (size_t i = crumb.index + 1; i < node.numItems; i++) node.items[i - 1] = node.items[i];
                 node.numItems--;
 
-                node.accum.sub(newItem.id);
+                node.accum.sub(oldItem);
                 node.accumCount--;
 
-                if (node.numItems < MIN_ITEMS) {
-                    needsRebalance = true;
+                needsRemove = false;
+            }
+
+
+            if (crumb.index < node.numItems) {
+                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+                auto childNodePtr = getNodeRead(node.items[crumb.index].nodeId);
+                if (childNodePtr.exists()) {
+                    auto &childNode = childNodePtr.get();
+                    node.items[crumb.index].item = childNode.items[0].item;
+                }
+            }
+
+
+            if (node.numItems < MIN_ITEMS && node.nextLeaf) {
+                auto &rightNode = getNodeWrite(node.nextLeaf).get();
+
+                uint64_t totalItems = node.numItems + rightNode.numItems;
+
+                if (totalItems <= MAX_JOIN) {
+                    // Move all items into rightNode
+
+                    ::memmove(rightNode.items + node.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
+                    ::memcpy(rightNode.items, node.items, sizeof(node.items[0]) * node.numItems);
+
+                    rightNode.numItems += node.numItems;
+                    rightNode.accumCount += node.accumCount;
+                    rightNode.accum.add(node.accum);
+
+                    if (node.prevLeaf) getNodeWrite(node.prevLeaf).get().nextLeaf = node.nextLeaf;
+                    rightNode.prevLeaf = node.prevLeaf;
+
+                    node.numItems = 0;
                 } else {
-                    needsMerge = false;
+                    // Re-balance
+
+                    throw err("impl");
+                }
+            }
+
+            if (node.numItems == 0) {
+                if (node.prevLeaf) getNodeWrite(node.prevLeaf).get().nextLeaf = node.nextLeaf;
+                if (node.nextLeaf) getNodeWrite(node.nextLeaf).get().prevLeaf = node.prevLeaf;
+
+                needsRemove = true;
+
+                // FIXME: actually deallocate node.items[crumb.index].nodeId
+            }
+
+            if (breadcrumbs.size() == 0) {
+            std::cout << "UUUUUUU" << std::endl;
+                // FIXME: deallocate node in these blocks
+
+                if (node.numItems == 1) {
+                    if (node.items[0].nodeId) setRootNodeId(node.items[0].nodeId);
+                } else if (node.numItems == 0) {
+                    setRootNodeId(0);
                 }
             }
         }

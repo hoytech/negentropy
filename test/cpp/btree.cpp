@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include <memory>
+#include <set>
 
 #include <hoytech/error.h>
 #include <hoytech/hex.h>
@@ -16,9 +17,73 @@
 
 
 
+struct Verifier {
+    std::set<uint64_t> addedTimestamps;
+
+    void insert(negentropy::storage::btree::BTreeCore &btree, uint64_t timestamp){
+        negentropy::Item item(timestamp, std::string(32, '\x01'));
+        btree.insert(item);
+        addedTimestamps.insert(timestamp);
+        doVerify(btree);
+    }
+
+    void erase(negentropy::storage::btree::BTreeCore &btree, uint64_t timestamp){
+        negentropy::Item item(timestamp, std::string(32, '\x01'));
+        btree.erase(item);
+        addedTimestamps.erase(timestamp);
+    negentropy::storage::btree::dump(btree);
+        doVerify(btree);
+    }
+
+    void doVerify(negentropy::storage::btree::BTreeCore &btree) {
+        negentropy::storage::btree::verify(btree);
+        auto iter = addedTimestamps.begin();
+
+    negentropy::storage::btree::dump(btree);
+        if (btree.size() != addedTimestamps.size()) throw negentropy::err("verify size mismatch");
+        btree.iterate(0, btree.size(), [&](const auto &item, size_t i) {
+            if (item.timestamp != *iter) throw negentropy::err("verify element mismatch");
+            iter = std::next(iter);
+            return true;
+        });
+    }
+};
+
+
+
 
 
 int main() {
+    Verifier v;
+    negentropy::storage::BTreeMem btree;
+
+    srand(0);
+    v.insert(btree, 0);
+    v.insert(btree, 1);
+    negentropy::storage::btree::dump(btree);
+
+    for (uint64_t i = 2; i < 10; i++) v.insert(btree, i);
+
+    v.erase(btree, 0);
+    v.erase(btree, 3);
+    v.erase(btree, 4);
+    v.erase(btree, 5);
+    v.erase(btree, 6);
+    v.erase(btree, 7);
+    negentropy::storage::btree::dump(btree);
+    v.erase(btree, 8);
+    v.erase(btree, 9);
+    v.erase(btree, 1);
+    v.erase(btree, 2);
+    //for (uint64_t i = 4; i < 5; i++) v.erase(btree, i);
+    negentropy::storage::btree::dump(btree);
+
+
+
+
+
+
+
     //std::cout << "SIZEOF LEAF: " << sizeof(negentropy::storage::LeafNode) << std::endl;
     //std::cout << "SIZEOF INTERIOR: " << sizeof(negentropy::storage::InteriorNode) << std::endl;
 
@@ -78,6 +143,7 @@ int main() {
 
 
 
+/*
     negentropy::storage::BTreeMem btree;
 
     auto add = [&](uint64_t timestamp){
@@ -89,8 +155,6 @@ int main() {
     srand(0);
     for (int i = 0; i < 1000; i++) add(rand());
     negentropy::storage::btree::dump(btree);
-
-/*
     */
 
 /*

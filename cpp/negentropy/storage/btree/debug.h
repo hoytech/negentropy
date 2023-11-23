@@ -42,7 +42,7 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
     auto nodePtr = btree.getNodeRead(nodeId);
     auto &node = nodePtr.get();
 
-    if (depth > 0 && node.numItems < MIN_ITEMS) throw err("verify: too few items");
+    if (node.nextLeaf && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
     if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
     if (node.items[0].nodeId == 0) {
@@ -97,10 +97,16 @@ inline void verify(BTreeCore &btree) {
         uint64_t i = 0, totalItems = 0;
         auto nodePtr = btree.getNodeRead(ctx.leafNodeIds[0]);
         std::optional<Item> prevItem;
+        uint64_t prevLeaf = 0;
 
         while (nodePtr.exists()) {
             auto &node = nodePtr.get();
+            std::cout << "ZING: " << nodePtr.nodeId << " / " << ctx.leafNodeIds[i] << std::endl;
             if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
+
+            if (prevLeaf != node.prevLeaf) throw err("verify: prevLeaf mismatch");
+            prevLeaf = nodePtr.nodeId;
+
             nodePtr = btree.getNodeRead(node.nextLeaf);
             i++;
 
