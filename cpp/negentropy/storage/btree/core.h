@@ -32,6 +32,7 @@ struct Node {
 
     Key items[MAX_ITEMS + 1];
 
+
     Node() {
         memset((void*)this, '\0', sizeof(*this));
     }
@@ -44,6 +45,7 @@ struct Node {
 struct NodePtr {
     Node *p;
     uint64_t nodeId;
+
 
     bool exists() {
         return p != nullptr;
@@ -79,6 +81,7 @@ struct BTreeCore : StorageBase {
     //// Search
 
     std::vector<Breadcrumb> searchItem(uint64_t rootNodeId, const Item &newItem, bool &found) {
+        found = false;
         std::vector<Breadcrumb> breadcrumbs;
 
         auto foundNode = getNodeRead(rootNodeId);
@@ -195,14 +198,7 @@ struct BTreeCore : StorageBase {
 
             // Update left-most key, in case item was inserted at the beginning
 
-            {
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
-                auto childNodePtr = getNodeRead(node.items[0].nodeId);
-                if (childNodePtr.exists()) {
-                    auto &childNode = childNodePtr.get();
-                    node.items[0].item = childNode.items[0].item;
-                }
-            }
+            refreshIndex(getNodeWrite(crumb.nodePtr.nodeId).get(), 0);
         }
 
         // Out of breadcrumbs but still need to merge: New level required
@@ -250,7 +246,6 @@ struct BTreeCore : StorageBase {
 
             auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
 
-std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " << crumb.index << std::endl;
             if (!needsRemove) {
                 node.accum.sub(oldItem);
                 node.accumCount--;
@@ -265,14 +260,9 @@ std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " <
             }
 
 
-            if (crumb.index < node.numItems) {
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
-                auto childNodePtr = getNodeRead(node.items[crumb.index].nodeId);
-                if (childNodePtr.exists()) {
-                    auto &childNode = childNodePtr.get();
-                    node.items[crumb.index].item = childNode.items[0].item;
-                }
-            }
+            // FIXME: describe
+
+            if (crumb.index < node.numItems) refreshIndex(node, crumb.index);
 
 
             if (node.numItems < MIN_ITEMS && node.nextLeaf) {
@@ -311,8 +301,7 @@ std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " <
             }
 
             if (breadcrumbs.size() == 0) {
-            std::cout << "UUUUUUU" << std::endl;
-                // FIXME: deallocate node in these blocks
+                // FIXME: deallocate old root node
 
                 if (node.numItems == 1) {
                     if (node.items[0].nodeId) setRootNodeId(node.items[0].nodeId);
@@ -323,7 +312,8 @@ std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " <
         }
     }
 
-    // These 2 methods are for compat with the vector interface
+
+    //// Compat with the vector interface
 
     void addItem(uint64_t createdAt, std::string_view id) {
         insert(Item(createdAt, id));
@@ -334,6 +324,14 @@ std::cout << "BREM: " << needsRemove << " / " << crumb.nodePtr.nodeId << " / " <
 
 
     //// Utils
+
+    void refreshIndex(Node &node, size_t index) {
+        auto childNodePtr = getNodeRead(node.items[index].nodeId);
+        if (childNodePtr.exists()) {
+            auto &childNode = childNodePtr.get();
+            node.items[index].item = childNode.items[0].item;
+        }
+    }
 
     void addToAccum(const Key &k, Node &node) {
         if (k.nodeId == 0) {

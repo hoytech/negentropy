@@ -31,7 +31,6 @@ struct Verifier {
         negentropy::Item item(timestamp, std::string(32, '\x01'));
         btree.erase(item);
         addedTimestamps.erase(timestamp);
-    negentropy::storage::btree::dump(btree);
         doVerify(btree);
     }
 
@@ -39,7 +38,6 @@ struct Verifier {
         negentropy::storage::btree::verify(btree);
         auto iter = addedTimestamps.begin();
 
-    negentropy::storage::btree::dump(btree);
         if (btree.size() != addedTimestamps.size()) throw negentropy::err("verify size mismatch");
         btree.iterate(0, btree.size(), [&](const auto &item, size_t i) {
             if (item.timestamp != *iter) throw negentropy::err("verify element mismatch");
@@ -60,22 +58,23 @@ int main() {
     srand(0);
     v.insert(btree, 0);
     v.insert(btree, 1);
-    negentropy::storage::btree::dump(btree);
-
     for (uint64_t i = 2; i < 10; i++) v.insert(btree, i);
 
-    v.erase(btree, 0);
+    v.erase(btree, 2);
     v.erase(btree, 3);
     v.erase(btree, 4);
-    v.erase(btree, 5);
-    v.erase(btree, 6);
     v.erase(btree, 7);
-    negentropy::storage::btree::dump(btree);
+
+    v.erase(btree, 1);
+
+/*
     v.erase(btree, 8);
     v.erase(btree, 9);
     v.erase(btree, 1);
     v.erase(btree, 2);
     //for (uint64_t i = 4; i < 5; i++) v.erase(btree, i);
+    */
+
     negentropy::storage::btree::dump(btree);
 
 

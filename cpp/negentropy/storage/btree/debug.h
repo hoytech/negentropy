@@ -101,7 +101,6 @@ inline void verify(BTreeCore &btree) {
 
         while (nodePtr.exists()) {
             auto &node = nodePtr.get();
-            std::cout << "ZING: " << nodePtr.nodeId << " / " << ctx.leafNodeIds[i] << std::endl;
             if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
 
             if (prevLeaf != node.prevLeaf) throw err("verify: prevLeaf mismatch");
