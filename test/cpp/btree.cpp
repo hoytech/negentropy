@@ -65,7 +65,9 @@ int main() {
     v.erase(btree, 4);
     v.erase(btree, 7);
 
+    negentropy::storage::btree::dump(btree);
     v.erase(btree, 1);
+    negentropy::storage::btree::dump(btree);
 
 /*
     v.erase(btree, 8);
@@ -74,8 +76,6 @@ int main() {
     v.erase(btree, 2);
     //for (uint64_t i = 4; i < 5; i++) v.erase(btree, i);
     */
-
-    negentropy::storage::btree::dump(btree);
 
 
 

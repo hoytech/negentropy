@@ -239,6 +239,7 @@ struct BTreeCore : StorageBase {
         // Remove from node
 
         bool needsRemove = true;
+        bool neighbourRefreshNeeded = false;
 
         while (breadcrumbs.size()) {
             auto crumb = breadcrumbs.back();
@@ -264,11 +265,25 @@ struct BTreeCore : StorageBase {
 
             if (crumb.index < node.numItems) refreshIndex(node, crumb.index);
 
+            if (neighbourRefreshNeeded) {
+                if (crumb.index == node.numItems - 1) {
+                    if (node.nextLeaf) {
+                        auto &rightNode = getNodeWrite(node.nextLeaf).get();
+                        refreshIndex(rightNode, 0);
+                    } else {
+                        throw err("no neighbour to refresh");
+                    }
+                } else {
+                    refreshIndex(node, crumb.index + 1);
+                }
+
+                neighbourRefreshNeeded = false;
+            }
+
 
             if (node.numItems < MIN_ITEMS && node.nextLeaf) {
                 auto &rightNode = getNodeWrite(node.nextLeaf).get();
-
-                uint64_t totalItems = node.numItems + rightNode.numItems;
+                size_t totalItems = node.numItems + rightNode.numItems;
 
                 if (totalItems <= MAX_JOIN) {
                     // Move all items into rightNode
@@ -287,8 +302,55 @@ struct BTreeCore : StorageBase {
                 } else {
                     // Re-balance
 
-                    throw err("impl");
+                    size_t numLeft = (totalItems + 1) / 2;
+                    size_t numRight = totalItems - numLeft;
+
+                    Accumulator accum;
+                    accum.setToZero();
+
+                    if (numLeft <= node.numItems) {
+                    std::cout << "DINGDING A" << std::endl;
+                        size_t moveFromLeft = node.numItems - numLeft;
+
+                        ::memmove(rightNode.items + moveFromLeft, rightNode.items, moveFromLeft * sizeof(rightNode.items[0]));
+
+                        for (size_t i = 0; i < moveFromLeft; i++) {
+                            const auto &item = node.items[node.numItems - moveFromLeft + i];
+                            rightNode.items[i] = item;
+                            accum.add(item.item);
+                        }
+
+                        node.accum.sub(accum);
+                        rightNode.accum.add(accum);
+
+                        node.accumCount -= moveFromLeft;
+                        rightNode.accumCount += moveFromLeft;
+                    } else {
+                    std::cout << "DINGDING B" << std::endl;
+                        size_t moveFromRight = rightNode.numItems - numRight;
+
+                        for (size_t i = 0; i < moveFromRight; i++) {
+                            const auto &item = rightNode.items[i];
+                            node.items[node.numItems + i] = item;
+                            accum.add(item.item);
+                        }
+
+                        ::memmove(rightNode.items, rightNode.items + moveFromRight, moveFromRight * sizeof(rightNode.items[0]));
+
+                        node.accum.add(accum);
+                        rightNode.accum.sub(accum);
+
+                        node.accumCount += moveFromRight;
+                        rightNode.accumCount -= moveFromRight;
+                    }
+
+                    node.numItems = numLeft;
+                    rightNode.numItems = numRight;
+
+                    neighbourRefreshNeeded = true;
                 }
+
+                // FIXME: zero out unused items?
             }
 
             if (node.numItems == 0) {
