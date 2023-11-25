@@ -147,8 +147,16 @@ struct Accumulator {
     }
 
     void sub(const Item &item) {
+        sub(item.id);
+    }
+
+    void sub(const Accumulator &acc) {
+        sub(acc.buf);
+    }
+
+    void sub(const uint8_t *otherBuf) {
         Accumulator neg;
-        memcpy(neg.buf, item.id, sizeof(buf));
+        memcpy(neg.buf, otherBuf, sizeof(buf));
         neg.negate();
         add(neg);
     }
