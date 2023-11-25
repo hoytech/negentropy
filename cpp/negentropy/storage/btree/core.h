@@ -180,7 +180,6 @@ struct BTreeCore : StorageBase {
                 right.numItems = MAX_ITEMS / 2;
 
                 for (size_t i = 0; i < left.numItems; i++) {
-                    auto &left = getNodeWrite(crumb.nodePtr.nodeId).get();
                     addToAccum(left.items[i], left);
                 }
 
@@ -191,7 +190,13 @@ struct BTreeCore : StorageBase {
 
                 right.nextLeaf = left.nextLeaf;
                 left.nextLeaf = rightPtr.nodeId;
+                std::cout << "SETTING PL OF NODE " << rightPtr.nodeId << " TO " << crumb.nodePtr.nodeId << std::endl;
                 right.prevLeaf = crumb.nodePtr.nodeId;
+
+                if (right.nextLeaf) {
+                    auto &rightRight = getNodeWrite(right.nextLeaf).get();
+                    rightRight.prevLeaf = rightPtr.nodeId;
+                }
 
                 newKey = { right.items[0].item, rightPtr.nodeId };
             }
@@ -266,8 +271,10 @@ struct BTreeCore : StorageBase {
             if (crumb.index < node.numItems) refreshIndex(node, crumb.index);
 
             if (neighbourRefreshNeeded) {
+            std::cout << "NRN " << crumb.nodePtr.nodeId << std::endl;
                 if (crumb.index == node.numItems - 1) {
                     if (node.nextLeaf) {
+            std::cout << "NL " << node.nextLeaf << std::endl;
                         auto &rightNode = getNodeWrite(node.nextLeaf).get();
                         refreshIndex(rightNode, 0);
                     } else {
@@ -277,7 +284,7 @@ struct BTreeCore : StorageBase {
                     refreshIndex(node, crumb.index + 1);
                 }
 
-                neighbourRefreshNeeded = false;
+                //neighbourRefreshNeeded = false;
             }
 
 
@@ -300,49 +307,32 @@ struct BTreeCore : StorageBase {
 
                     node.numItems = 0;
                 } else {
-                    // Re-balance
+                    // Re-balance from right to left
+                    std::cout << "REBAL" << std::endl;
 
                     size_t numLeft = (totalItems + 1) / 2;
                     size_t numRight = totalItems - numLeft;
+                    if (numLeft <= node.numItems) throw("right node too small for rebalance");
 
                     Accumulator accum;
                     accum.setToZero();
 
-                    if (numLeft <= node.numItems) {
-                    std::cout << "DINGDING A" << std::endl;
-                        size_t moveFromLeft = node.numItems - numLeft;
+                    size_t moveFromRight = rightNode.numItems - numRight;
 
-                        ::memmove(rightNode.items + moveFromLeft, rightNode.items, moveFromLeft * sizeof(rightNode.items[0]));
-
-                        for (size_t i = 0; i < moveFromLeft; i++) {
-                            const auto &item = node.items[node.numItems - moveFromLeft + i];
-                            rightNode.items[i] = item;
-                            accum.add(item.item);
-                        }
-
-                        node.accum.sub(accum);
-                        rightNode.accum.add(accum);
-
-                        node.accumCount -= moveFromLeft;
-                        rightNode.accumCount += moveFromLeft;
-                    } else {
-                    std::cout << "DINGDING B" << std::endl;
-                        size_t moveFromRight = rightNode.numItems - numRight;
-
-                        for (size_t i = 0; i < moveFromRight; i++) {
-                            const auto &item = rightNode.items[i];
-                            node.items[node.numItems + i] = item;
-                            accum.add(item.item);
-                        }
-
-                        ::memmove(rightNode.items, rightNode.items + moveFromRight, moveFromRight * sizeof(rightNode.items[0]));
-
-                        node.accum.add(accum);
-                        rightNode.accum.sub(accum);
-
-                        node.accumCount += moveFromRight;
-                        rightNode.accumCount -= moveFromRight;
+                    for (size_t i = 0; i < moveFromRight; i++) {
+                        auto &item = rightNode.items[i];
+                        node.items[node.numItems + i] = item;
+                        accum.add(item.item);
                     }
+
+                    ::memmove(rightNode.items, rightNode.items + moveFromRight, (rightNode.numItems - moveFromRight) * sizeof(rightNode.items[0]));
+                    ::memset((void*)(rightNode.items + numRight), '\0', moveFromRight * sizeof(rightNode.items[0]));
+
+                    node.accum.add(accum);
+                    rightNode.accum.sub(accum);
+
+                    node.accumCount += moveFromRight;
+                    rightNode.accumCount -= moveFromRight;
 
                     node.numItems = numLeft;
                     rightNode.numItems = numRight;

@@ -12,7 +12,10 @@ using err = std::runtime_error;
 
 
 inline void dump(BTreeCore &btree, uint64_t nodeId, int depth) {
-    if (nodeId == 0) return;
+    if (nodeId == 0) {
+        if (depth == 0) std::cout << "EMPTY TREE" << std::endl;
+        return;
+    }
 
     auto nodePtr = btree.getNodeRead(nodeId);
     auto &node = nodePtr.get();
@@ -33,15 +36,20 @@ inline void dump(BTreeCore &btree) {
 
 struct VerifyContext {
     std::optional<uint64_t> leafDepth;
+    std::set<uint64_t> allNodeIds;
     std::vector<uint64_t> leafNodeIds;
 };
 
 inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyContext &ctx, Accumulator *accumOut = nullptr, uint64_t *accumCountOut = nullptr) {
     if (nodeId == 0) return;
 
+    if (ctx.allNodeIds.contains(nodeId)) throw err("verify: saw node id again");
+    ctx.allNodeIds.insert(nodeId);
+
     auto nodePtr = btree.getNodeRead(nodeId);
     auto &node = nodePtr.get();
 
+    if (node.numItems == 0) throw err("verify: empty node");
     if (node.nextLeaf && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
     if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
@@ -78,6 +86,8 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
         }
     }
 
+    std::cout << "ACMM NODE " << nodeId << std::endl;
+    std::cout << hoytech::to_hex(accum.sv()) << " / " << hoytech::to_hex(node.accum.sv()) << nodeId << std::endl;
     if (accum.sv() != node.accum.sv()) throw err("verify: accum mismatch");
     if (accumCount != node.accumCount) throw err("verify: accumCount mismatch");
 
@@ -91,6 +101,7 @@ inline void verify(BTreeCore &btree) {
     accum.setToZero();
     uint64_t accumCount = 0;
 
+    std::cout << "VVVVVVVVVVVVVV" << std::endl;
     verify(btree, btree.getRootNodeId(), 0, ctx, &accum, &accumCount);
 
     if (ctx.leafNodeIds.size()) {
@@ -103,6 +114,7 @@ inline void verify(BTreeCore &btree) {
             auto &node = nodePtr.get();
             if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
 
+            std::cout << "PL AT NODE " << nodePtr.nodeId << " IS " << node.prevLeaf << " EXPECTED " << prevLeaf << std::endl;
             if (prevLeaf != node.prevLeaf) throw err("verify: prevLeaf mismatch");
             prevLeaf = nodePtr.nodeId;
 
