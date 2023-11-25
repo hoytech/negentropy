@@ -63,7 +63,7 @@ int main() {
     Verifier v;
     negentropy::storage::BTreeMem btree;
 
-    while (btree.size() < 1000) {
+    while (btree.size() < 1500) {
         if (rand() % 3 <= 1) {
             std::cout << "INSERT" << std::endl;
             int timestamp;

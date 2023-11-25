@@ -190,7 +190,6 @@ struct BTreeCore : StorageBase {
 
                 right.nextLeaf = left.nextLeaf;
                 left.nextLeaf = rightPtr.nodeId;
-                std::cout << "SETTING PL OF NODE " << rightPtr.nodeId << " TO " << crumb.nodePtr.nodeId << std::endl;
                 right.prevLeaf = crumb.nodePtr.nodeId;
 
                 if (right.nextLeaf) {
@@ -271,19 +270,8 @@ struct BTreeCore : StorageBase {
             if (crumb.index < node.numItems) refreshIndex(node, crumb.index);
 
             if (neighbourRefreshNeeded) {
-            std::cout << "NRN " << crumb.nodePtr.nodeId << std::endl;
-                if (crumb.index == node.numItems - 1) {
-                    if (node.nextLeaf) {
-            std::cout << "NL " << node.nextLeaf << std::endl;
-                        auto &rightNode = getNodeWrite(node.nextLeaf).get();
-                        refreshIndex(rightNode, 0);
-                    } else {
-                        throw err("no neighbour to refresh");
-                    }
-                } else {
-                    refreshIndex(node, crumb.index + 1);
-                    neighbourRefreshNeeded = false;
-                }
+                refreshIndex(node, crumb.index + 1);
+                neighbourRefreshNeeded = false;
             }
 
 
@@ -297,7 +285,6 @@ struct BTreeCore : StorageBase {
                     accum.setToZero();
 
                     if (rightNode.numItems >= numRight) {
-                    std::cout << "REBAL R to L" << std::endl;
                         // Move extra from right to left
 
                         size_t numMove = rightNode.numItems - numRight;
@@ -317,13 +304,11 @@ struct BTreeCore : StorageBase {
                         leftNode.accumCount += numMove;
                         rightNode.accumCount -= numMove;
 
-                        neighbourRefreshNeeded = true; // FIXME: only needed in one case?
+                        neighbourRefreshNeeded = true;
                     } else {
-                    std::cout << "REBAL L to R" << std::endl;
                         // Move extra from left to right
 
                         size_t numMove = leftNode.numItems - numLeft;
-                        std::cout << "ZMMMZM " << numMove << std::endl;
 
                         ::memmove(rightNode.items + numMove, rightNode.items, rightNode.numItems * sizeof(rightNode.items[0]));
 
@@ -340,8 +325,6 @@ struct BTreeCore : StorageBase {
 
                         leftNode.accumCount -= numMove;
                         rightNode.accumCount += numMove;
-
-                        //neighbourRefreshNeeded = true; // FIXME: only needed in one case?
                     }
 
                     leftNode.numItems = numLeft;

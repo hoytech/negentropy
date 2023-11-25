@@ -88,8 +88,6 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
         }
     }
 
-    std::cout << "ACMM NODE " << nodeId << std::endl;
-    std::cout << hoytech::to_hex(accum.sv()) << " / " << hoytech::to_hex(node.accum.sv()) << nodeId << std::endl;
     if (accum.sv() != node.accum.sv()) throw err("verify: accum mismatch");
     if (accumCount != node.accumCount) throw err("verify: accumCount mismatch");
 
@@ -103,7 +101,6 @@ inline void verify(BTreeCore &btree) {
     accum.setToZero();
     uint64_t accumCount = 0;
 
-    std::cout << "VVVVVVVVVVVVVV" << std::endl;
     verify(btree, btree.getRootNodeId(), 0, ctx, &accum, &accumCount);
 
     if (ctx.leafNodeIds.size()) {
@@ -116,7 +113,6 @@ inline void verify(BTreeCore &btree) {
             auto &node = nodePtr.get();
             if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
 
-            std::cout << "PL AT NODE " << nodePtr.nodeId << " IS " << node.prevLeaf << " EXPECTED " << prevLeaf << std::endl;
             if (prevLeaf != node.prevLeaf) throw err("verify: prevLeaf mismatch");
             prevLeaf = nodePtr.nodeId;
 
