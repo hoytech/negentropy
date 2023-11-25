@@ -16,6 +16,11 @@ const size_t MAX_ITEMS = 6;
 struct Key {
     Item item;
     uint64_t nodeId;
+
+    void setToZero() {
+        item = Item();
+        nodeId = 0;
+    }
 };
 
 inline bool operator<(const Key &a, const Key &b) {
@@ -188,6 +193,8 @@ struct BTreeCore : StorageBase {
                     addToAccum(right.items[i], right);
                 }
 
+                for (size_t i = left.numItems; i < MAX_ITEMS + 1; i++) left.items[i].setToZero();
+
                 right.nextLeaf = left.nextLeaf;
                 left.nextLeaf = rightPtr.nodeId;
                 right.prevLeaf = crumb.nodePtr.nodeId;
@@ -257,6 +264,7 @@ struct BTreeCore : StorageBase {
             } else {
                 for (size_t i = crumb.index + 1; i < node.numItems; i++) node.items[i - 1] = node.items[i];
                 node.numItems--;
+                node.items[node.numItems].setToZero();
 
                 node.accum.sub(oldItem);
                 node.accumCount--;
@@ -296,7 +304,8 @@ struct BTreeCore : StorageBase {
                         }
 
                         ::memmove(rightNode.items, rightNode.items + numMove, (rightNode.numItems - numMove) * sizeof(rightNode.items[0]));
-                        ::memset((void*)(rightNode.items + numRight), '\0', numMove * sizeof(rightNode.items[0]));
+
+                        for (size_t i = numRight; i < rightNode.numItems; i++) rightNode.items[i].setToZero();
 
                         leftNode.accum.add(accum);
                         rightNode.accum.sub(accum);
@@ -318,7 +327,7 @@ struct BTreeCore : StorageBase {
                             accum.add(item.item);
                         }
 
-                        //FIXME ::memset((void*)(rightNode.items + numRight), '\0', numMove * sizeof(rightNode.items[0]));
+                        for (size_t i = numLeft; i < leftNode.numItems; i++) leftNode.items[i].setToZero();
 
                         leftNode.accum.sub(accum);
                         rightNode.accum.add(accum);

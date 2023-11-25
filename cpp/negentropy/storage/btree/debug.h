@@ -88,6 +88,10 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
         }
     }
 
+    for (size_t i = node.numItems; i < MAX_ITEMS + 1; i++) {
+        for (size_t j = 0; j < sizeof(Key); j++) if (((char*)&node.items[i])[j] != '\0') throw err("verify: memory not zeroed out");
+    }
+
     if (accum.sv() != node.accum.sv()) throw err("verify: accum mismatch");
     if (accumCount != node.accumCount) throw err("verify: accumCount mismatch");
 
