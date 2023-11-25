@@ -282,9 +282,8 @@ struct BTreeCore : StorageBase {
                     }
                 } else {
                     refreshIndex(node, crumb.index + 1);
+                    neighbourRefreshNeeded = false;
                 }
-
-                //neighbourRefreshNeeded = false;
             }
 
 
@@ -308,7 +307,6 @@ struct BTreeCore : StorageBase {
                     node.numItems = 0;
                 } else {
                     // Re-balance from right to left
-                    std::cout << "REBAL" << std::endl;
 
                     size_t numLeft = (totalItems + 1) / 2;
                     size_t numRight = totalItems - numLeft;
@@ -339,8 +337,6 @@ struct BTreeCore : StorageBase {
 
                     neighbourRefreshNeeded = true;
                 }
-
-                // FIXME: zero out unused items?
             }
 
             if (node.numItems == 0) {

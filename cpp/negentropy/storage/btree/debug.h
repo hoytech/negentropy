@@ -63,6 +63,8 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
         ctx.leafNodeIds.push_back(nodeId);
     }
 
+    // FIXME: verify unused items are zeroed
+
     Accumulator accum;
     accum.setToZero();
     uint64_t accumCount = 0;
