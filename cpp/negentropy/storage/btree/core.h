@@ -287,55 +287,118 @@ struct BTreeCore : StorageBase {
             }
 
 
-            if (node.numItems < MIN_ITEMS && node.nextLeaf) {
-                auto &rightNode = getNodeWrite(node.nextLeaf).get();
-                size_t totalItems = node.numItems + rightNode.numItems;
-
-                if (totalItems <= MAX_JOIN) {
-                    // Move all items into rightNode
-
-                    ::memmove(rightNode.items + node.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
-                    ::memcpy(rightNode.items, node.items, sizeof(node.items[0]) * node.numItems);
-
-                    rightNode.numItems += node.numItems;
-                    rightNode.accumCount += node.accumCount;
-                    rightNode.accum.add(node.accum);
-
-                    if (node.prevLeaf) getNodeWrite(node.prevLeaf).get().nextLeaf = node.nextLeaf;
-                    rightNode.prevLeaf = node.prevLeaf;
-
-                    node.numItems = 0;
-                } else {
-                    // Re-balance from right to left
-
+            if (node.numItems < MIN_ITEMS && breadcrumbs.size() && breadcrumbs.back().nodePtr.get().numItems > 1) {
+                auto rebalance = [&](Node &leftNode, Node &rightNode) {
+                    size_t totalItems = leftNode.numItems + rightNode.numItems;
                     size_t numLeft = (totalItems + 1) / 2;
                     size_t numRight = totalItems - numLeft;
-                    if (numLeft <= node.numItems) throw("right node too small for rebalance");
 
                     Accumulator accum;
                     accum.setToZero();
 
-                    size_t moveFromRight = rightNode.numItems - numRight;
+                    if (rightNode.numItems >= numRight) {
+                    std::cout << "REBAL R to L" << std::endl;
+                        // Move extra from right to left
 
-                    for (size_t i = 0; i < moveFromRight; i++) {
-                        auto &item = rightNode.items[i];
-                        node.items[node.numItems + i] = item;
-                        accum.add(item.item);
+                        size_t numMove = rightNode.numItems - numRight;
+
+                        for (size_t i = 0; i < numMove; i++) {
+                            auto &item = rightNode.items[i];
+                            leftNode.items[leftNode.numItems + i] = item;
+                            accum.add(item.item);
+                        }
+
+                        ::memmove(rightNode.items, rightNode.items + numMove, (rightNode.numItems - numMove) * sizeof(rightNode.items[0]));
+                        ::memset((void*)(rightNode.items + numRight), '\0', numMove * sizeof(rightNode.items[0]));
+
+                        leftNode.accum.add(accum);
+                        rightNode.accum.sub(accum);
+
+                        leftNode.accumCount += numMove;
+                        rightNode.accumCount -= numMove;
+
+                        neighbourRefreshNeeded = true; // FIXME: only needed in one case?
+                    } else {
+                    std::cout << "REBAL L to R" << std::endl;
+                        // Move extra from left to right
+
+                        size_t numMove = leftNode.numItems - numLeft;
+                        std::cout << "ZMMMZM " << numMove << std::endl;
+
+                        ::memmove(rightNode.items + numMove, rightNode.items, rightNode.numItems * sizeof(rightNode.items[0]));
+
+                        for (size_t i = 0; i < numMove; i++) {
+                            auto &item = leftNode.items[numLeft + i];
+                            rightNode.items[i] = item;
+                            accum.add(item.item);
+                        }
+
+                        //FIXME ::memset((void*)(rightNode.items + numRight), '\0', numMove * sizeof(rightNode.items[0]));
+
+                        leftNode.accum.sub(accum);
+                        rightNode.accum.add(accum);
+
+                        leftNode.accumCount -= numMove;
+                        rightNode.accumCount += numMove;
+
+                        //neighbourRefreshNeeded = true; // FIXME: only needed in one case?
                     }
 
-                    ::memmove(rightNode.items, rightNode.items + moveFromRight, (rightNode.numItems - moveFromRight) * sizeof(rightNode.items[0]));
-                    ::memset((void*)(rightNode.items + numRight), '\0', moveFromRight * sizeof(rightNode.items[0]));
-
-                    node.accum.add(accum);
-                    rightNode.accum.sub(accum);
-
-                    node.accumCount += moveFromRight;
-                    rightNode.accumCount -= moveFromRight;
-
-                    node.numItems = numLeft;
+                    leftNode.numItems = numLeft;
                     rightNode.numItems = numRight;
+                };
 
-                    neighbourRefreshNeeded = true;
+                if (breadcrumbs.back().index == 0) {
+                    // Use neighbour to the right
+
+                    auto &leftNode = node;
+                    auto &rightNode = getNodeWrite(node.nextLeaf).get();
+                    size_t totalItems = leftNode.numItems + rightNode.numItems;
+
+                    if (totalItems <= MAX_JOIN) {
+                        // Move all items into right
+
+                        ::memmove(rightNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
+                        ::memcpy(rightNode.items, leftNode.items, sizeof(leftNode.items[0]) * leftNode.numItems);
+
+                        rightNode.numItems += leftNode.numItems;
+                        rightNode.accumCount += leftNode.accumCount;
+                        rightNode.accum.add(leftNode.accum);
+
+                        if (leftNode.prevLeaf) getNodeWrite(leftNode.prevLeaf).get().nextLeaf = leftNode.nextLeaf;
+                        rightNode.prevLeaf = leftNode.prevLeaf;
+
+                        leftNode.numItems = 0;
+                    } else {
+                        // Rebalance from left to right
+
+                        rebalance(leftNode, rightNode);
+                    }
+                } else {
+                    // Use neighbour to the left
+
+                    auto &leftNode = getNodeWrite(node.prevLeaf).get();
+                    auto &rightNode = node;
+                    size_t totalItems = leftNode.numItems + rightNode.numItems;
+
+                    if (totalItems <= MAX_JOIN) {
+                        // Move all items into left
+
+                        ::memcpy(leftNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
+
+                        leftNode.numItems += rightNode.numItems;
+                        leftNode.accumCount += rightNode.accumCount;
+                        leftNode.accum.add(rightNode.accum);
+
+                        if (rightNode.nextLeaf) getNodeWrite(rightNode.nextLeaf).get().prevLeaf = rightNode.prevLeaf;
+                        leftNode.nextLeaf = rightNode.nextLeaf;
+
+                        rightNode.numItems = 0;
+                    } else {
+                        // Rebalance from right to left
+
+                        rebalance(leftNode, rightNode);
+                    }
                 }
             }
 

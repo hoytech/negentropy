@@ -50,7 +50,7 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
     auto &node = nodePtr.get();
 
     if (node.numItems == 0) throw err("verify: empty node");
-    if (node.nextLeaf && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
+    if (depth > 0 && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
     if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
     if (node.items[0].nodeId == 0) {
