@@ -36,7 +36,7 @@ struct Verifier {
 
     void doVerify(negentropy::storage::btree::BTreeCore &btree) {
         try {
-            negentropy::storage::btree::verify(btree);
+            negentropy::storage::btree::verify(btree, true);
         } catch (...) {
             negentropy::storage::btree::dump(btree);
             throw;
@@ -63,15 +63,15 @@ int main() {
     Verifier v;
     negentropy::storage::BTreeMem btree;
 
-    while (btree.size() < 1500) {
+    while (btree.size() < 1000) {
         if (rand() % 3 <= 1) {
-            std::cout << "INSERT" << std::endl;
             int timestamp;
 
             do {
                 timestamp = rand();
             } while (v.addedTimestamps.contains(timestamp));
 
+            std::cout << "INSERT " << timestamp << std::endl;
             v.insert(btree, timestamp);
         } else if (v.addedTimestamps.size()) {
             auto it = v.addedTimestamps.begin();
@@ -80,6 +80,21 @@ int main() {
             std::cout << "DEL " << (*it) << std::endl;
             v.erase(btree, *it);
         }
+
+        negentropy::storage::btree::dump(btree);
+    }
+
+    negentropy::storage::btree::dump(btree);
+
+    std::cout << "REMOVING ALL" << std::endl;
+
+    while (btree.size()) {
+        auto it = v.addedTimestamps.begin();
+        std::advance(it, rand() % v.addedTimestamps.size());
+
+        std::cout << "DEL " << (*it) << std::endl;
+        v.erase(btree, *it);
+
         negentropy::storage::btree::dump(btree);
     }
 

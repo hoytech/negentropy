@@ -3,6 +3,7 @@
 #include "negentropy.h"
 
 
+
 namespace negentropy { namespace storage { namespace btree {
 
 using err = std::runtime_error;
@@ -291,16 +292,25 @@ struct BTreeCore : StorageBase {
 
                     Accumulator accum;
                     accum.setToZero();
+                    uint64_t accumCount = 0;
 
                     if (rightNode.numItems >= numRight) {
                         // Move extra from right to left
+            std::cout << "REBAL A" << std::endl;
 
                         size_t numMove = rightNode.numItems - numRight;
 
                         for (size_t i = 0; i < numMove; i++) {
                             auto &item = rightNode.items[i];
+                            if (item.nodeId == 0) {
+                                accum.add(item.item);
+                                accumCount++;
+                            } else {
+                                auto &movingNode = getNodeRead(item.nodeId).get();
+                                accum.add(movingNode.accum);
+                                accumCount += movingNode.accumCount;
+                            }
                             leftNode.items[leftNode.numItems + i] = item;
-                            accum.add(item.item);
                         }
 
                         ::memmove(rightNode.items, rightNode.items + numMove, (rightNode.numItems - numMove) * sizeof(rightNode.items[0]));
@@ -310,21 +320,29 @@ struct BTreeCore : StorageBase {
                         leftNode.accum.add(accum);
                         rightNode.accum.sub(accum);
 
-                        leftNode.accumCount += numMove;
-                        rightNode.accumCount -= numMove;
+                        leftNode.accumCount += accumCount;
+                        rightNode.accumCount -= accumCount;
 
                         neighbourRefreshNeeded = true;
                     } else {
                         // Move extra from left to right
 
                         size_t numMove = leftNode.numItems - numLeft;
+            std::cout << "REBAL B NUMMOVE=" << numMove << std::endl;
 
                         ::memmove(rightNode.items + numMove, rightNode.items, rightNode.numItems * sizeof(rightNode.items[0]));
 
                         for (size_t i = 0; i < numMove; i++) {
                             auto &item = leftNode.items[numLeft + i];
+                            if (item.nodeId == 0) {
+                                accum.add(item.item);
+                                accumCount++;
+                            } else {
+                                auto &movingNode = getNodeRead(item.nodeId).get();
+                                accum.add(movingNode.accum);
+                                accumCount += movingNode.accumCount;
+                            }
                             rightNode.items[i] = item;
-                            accum.add(item.item);
                         }
 
                         for (size_t i = numLeft; i < leftNode.numItems; i++) leftNode.items[i].setToZero();
@@ -332,14 +350,15 @@ struct BTreeCore : StorageBase {
                         leftNode.accum.sub(accum);
                         rightNode.accum.add(accum);
 
-                        leftNode.accumCount -= numMove;
-                        rightNode.accumCount += numMove;
+                        leftNode.accumCount -= accumCount;
+                        rightNode.accumCount += accumCount;
                     }
 
                     leftNode.numItems = numLeft;
                     rightNode.numItems = numRight;
                 };
 
+            std::cout << "PARENT IS " << breadcrumbs.back().nodePtr.nodeId << " with INDEX " << breadcrumbs.back().index << std::endl;
                 if (breadcrumbs.back().index == 0) {
                     // Use neighbour to the right
 
@@ -349,6 +368,7 @@ struct BTreeCore : StorageBase {
 
                     if (totalItems <= MAX_JOIN) {
                         // Move all items into right
+                        std::cout << "MOVING ALL (R) FROM " << crumb.nodePtr.nodeId << " TO " << node.nextLeaf << std::endl;
 
                         ::memmove(rightNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
                         ::memcpy(rightNode.items, leftNode.items, sizeof(leftNode.items[0]) * leftNode.numItems);
@@ -363,6 +383,7 @@ struct BTreeCore : StorageBase {
                         leftNode.numItems = 0;
                     } else {
                         // Rebalance from left to right
+                        std::cout << "REBAL (L->R) FROM " << crumb.nodePtr.nodeId << " TO " << node.nextLeaf << std::endl;
 
                         rebalance(leftNode, rightNode);
                     }
@@ -375,6 +396,7 @@ struct BTreeCore : StorageBase {
 
                     if (totalItems <= MAX_JOIN) {
                         // Move all items into left
+                        std::cout << "MOVING ALL (L) FROM " << crumb.nodePtr.nodeId << " TO " << node.prevLeaf << std::endl;
 
                         ::memcpy(leftNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
 
@@ -389,6 +411,7 @@ struct BTreeCore : StorageBase {
                     } else {
                         // Rebalance from right to left
 
+                        std::cout << "REBAL (R->L) " << node.prevLeaf << " / " << crumb.nodePtr.nodeId << std::endl;
                         rebalance(leftNode, rightNode);
                     }
                 }
@@ -400,17 +423,20 @@ struct BTreeCore : StorageBase {
 
                 needsRemove = true;
 
-                // FIXME: actually deallocate node.items[crumb.index].nodeId
+                std::cout << "DEL NODE " << crumb.nodePtr.nodeId << std::endl;
+                deleteNode(crumb.nodePtr.nodeId);
             }
+        }
 
-            if (breadcrumbs.size() == 0) {
-                // FIXME: deallocate old root node
+        if (needsRemove) {
+            setRootNodeId(0);
+        } else {
+            auto &node = getNodeRead(rootNodeId).get();
 
-                if (node.numItems == 1) {
-                    if (node.items[0].nodeId) setRootNodeId(node.items[0].nodeId);
-                } else if (node.numItems == 0) {
-                    setRootNodeId(0);
-                }
+            if (node.numItems == 1 && node.items[0].nodeId) {
+                setRootNodeId(node.items[0].nodeId);
+                std::cout << "DEL ROOT NODE " << rootNodeId << std::endl;
+                deleteNode(rootNodeId);
             }
         }
     }
