@@ -10,6 +10,10 @@ using err = std::runtime_error;
 
 /*
 
+Each node contains an array of keys. For leaf nodes, the keys are 0. For non-leaf nodes, these will
+be the nodeIds of the children leaves. The items in the keys of non-leaf nodes are the first items
+in the corresponding child nodes.
+
 Except for the right-most nodes in the tree at each level (which includes the root node), all nodes
 contain at least MIN_ITEMS and at most MAX_ITEMS.
 
@@ -191,13 +195,13 @@ struct BTreeCore : StorageBase {
             auto crumb = breadcrumbs.back();
             breadcrumbs.pop_back();
 
+            auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
+
             if (!needsMerge) {
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
                 node.accum.add(newItem);
                 node.accumCount++;
             } else if (crumb.nodePtr.get().numItems < MAX_ITEMS) {
                 // Happy path: Node has room for new item
-                auto &node = getNodeWrite(crumb.nodePtr.nodeId).get();
 
                 node.items[node.numItems] = newKey;
                 std::inplace_merge(node.items, node.items + node.numItems, node.items + node.numItems + 1);
@@ -210,7 +214,7 @@ struct BTreeCore : StorageBase {
             } else {
                 // Node is full: Split it into 2
 
-                auto &left = getNodeWrite(crumb.nodePtr.nodeId).get();
+                auto &left = node;
                 auto rightPtr = makeNode();
                 auto &right = rightPtr.get();
 
@@ -255,7 +259,7 @@ struct BTreeCore : StorageBase {
 
             // Update left-most key, in case item was inserted at the beginning
 
-            refreshIndex(getNodeWrite(crumb.nodePtr.nodeId).get(), 0);
+            refreshIndex(node, 0);
         }
 
         // Out of breadcrumbs but still need to merge: New level required
@@ -318,8 +322,6 @@ struct BTreeCore : StorageBase {
                 needsRemove = false;
             }
 
-
-            // FIXME: describe
 
             if (crumb.index < node.numItems) refreshIndex(node, crumb.index);
 
