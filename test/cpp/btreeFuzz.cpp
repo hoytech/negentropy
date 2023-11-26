@@ -38,6 +38,7 @@ struct Verifier {
         try {
             negentropy::storage::btree::verify(btree, true);
         } catch (...) {
+            std::cout << "TREE FAILED INVARIANTS:" << std::endl;
             negentropy::storage::btree::dump(btree);
             throw;
         }
@@ -58,12 +59,15 @@ struct Verifier {
 
 
 int main() {
+    std::cout << "SIZEOF NODE: " << sizeof(negentropy::storage::Node) << std::endl;
+
+
     srand(0);
 
     Verifier v;
     negentropy::storage::BTreeMem btree;
 
-    while (btree.size() < 1000) {
+    while (btree.size() < 5000) {
         if (rand() % 3 <= 1) {
             int timestamp;
 
@@ -71,7 +75,7 @@ int main() {
                 timestamp = rand();
             } while (v.addedTimestamps.contains(timestamp));
 
-            std::cout << "INSERT " << timestamp << std::endl;
+            std::cout << "INSERT " << timestamp << " size = " << btree.size() << std::endl;
             v.insert(btree, timestamp);
         } else if (v.addedTimestamps.size()) {
             auto it = v.addedTimestamps.begin();
@@ -80,51 +84,18 @@ int main() {
             std::cout << "DEL " << (*it) << std::endl;
             v.erase(btree, *it);
         }
-
-        negentropy::storage::btree::dump(btree);
     }
-
-    negentropy::storage::btree::dump(btree);
 
     std::cout << "REMOVING ALL" << std::endl;
 
     while (btree.size()) {
         auto it = v.addedTimestamps.begin();
         std::advance(it, rand() % v.addedTimestamps.size());
+        auto timestamp = *it;
 
-        std::cout << "DEL " << (*it) << std::endl;
+        std::cout << "DEL " << timestamp << " size = " << btree.size() << std::endl;
         v.erase(btree, *it);
-
-        negentropy::storage::btree::dump(btree);
     }
-
-    negentropy::storage::btree::dump(btree);
-
-/*
-    Verifier v;
-    negentropy::storage::BTreeMem btree;
-
-    srand(0);
-    v.insert(btree, 0);
-    v.insert(btree, 1);
-    for (uint64_t i = 2; i < 10; i++) v.insert(btree, i);
-
-    v.erase(btree, 2);
-    v.erase(btree, 3);
-    v.erase(btree, 4);
-    v.erase(btree, 7);
-
-    negentropy::storage::btree::dump(btree);
-    v.erase(btree, 1);
-    negentropy::storage::btree::dump(btree);
-    */
-
-
-
-
-
-    //std::cout << "SIZEOF LEAF: " << sizeof(negentropy::storage::LeafNode) << std::endl;
-    //std::cout << "SIZEOF INTERIOR: " << sizeof(negentropy::storage::InteriorNode) << std::endl;
 
 
 /*
@@ -179,43 +150,6 @@ int main() {
         });
     }
     */
-
-
-
-/*
-    negentropy::storage::BTreeMem btree;
-
-    auto add = [&](uint64_t timestamp){
-        negentropy::Item item(timestamp, std::string(32, '\x01'));
-        btree.insert(item);
-        negentropy::storage::btree::verify(btree);
-    };
-
-    srand(0);
-    for (int i = 0; i < 1000; i++) add(rand());
-    negentropy::storage::btree::dump(btree);
-    */
-
-/*
-    std::cout << "-----------------" << std::endl;
-    std::cout << "SIZE = " << btree.size() << std::endl;
-
-    for (size_t i = 0; i < btree.size(); i++) {
-        std::cout << "GI " << i << "  = " << btree.getItem(i).timestamp << std::endl;
-    }
-
-    btree.iterate(5, 8, [&](const auto &item, size_t i) {
-        std::cout << "II = " << item.timestamp << " (" << i << ")" << std::endl;
-        return true;
-    });
-
-
-    std::cout << "FLB: " << btree.findLowerBound(negentropy::Bound(1031)) << std::endl;
-
-
-    std::cout << "FP: " << hoytech::to_hex(btree.fingerprint(0, btree.size()).sv()) << std::endl;
-    */
-
 
 
     return 0;

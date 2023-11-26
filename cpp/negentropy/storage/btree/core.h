@@ -8,11 +8,15 @@ namespace negentropy { namespace storage { namespace btree {
 
 using err = std::runtime_error;
 
-//const size_t MIN_ITEMS = 30;
-//const size_t MAX_ITEMS = 80;
+#ifdef NE_FUZZ_TEST
 const size_t MIN_ITEMS = 2;
 const size_t MAX_JOIN = 4;
 const size_t MAX_ITEMS = 6;
+#else
+const size_t MIN_ITEMS = 30;
+const size_t MAX_JOIN = 60;
+const size_t MAX_ITEMS = 80;
+#endif
 
 struct Key {
     Item item;
@@ -296,7 +300,6 @@ struct BTreeCore : StorageBase {
 
                     if (rightNode.numItems >= numRight) {
                         // Move extra from right to left
-            std::cout << "REBAL A" << std::endl;
 
                         size_t numMove = rightNode.numItems - numRight;
 
@@ -328,7 +331,6 @@ struct BTreeCore : StorageBase {
                         // Move extra from left to right
 
                         size_t numMove = leftNode.numItems - numLeft;
-            std::cout << "REBAL B NUMMOVE=" << numMove << std::endl;
 
                         ::memmove(rightNode.items + numMove, rightNode.items, rightNode.numItems * sizeof(rightNode.items[0]));
 
@@ -358,7 +360,6 @@ struct BTreeCore : StorageBase {
                     rightNode.numItems = numRight;
                 };
 
-            std::cout << "PARENT IS " << breadcrumbs.back().nodePtr.nodeId << " with INDEX " << breadcrumbs.back().index << std::endl;
                 if (breadcrumbs.back().index == 0) {
                     // Use neighbour to the right
 
@@ -368,7 +369,6 @@ struct BTreeCore : StorageBase {
 
                     if (totalItems <= MAX_JOIN) {
                         // Move all items into right
-                        std::cout << "MOVING ALL (R) FROM " << crumb.nodePtr.nodeId << " TO " << node.nextLeaf << std::endl;
 
                         ::memmove(rightNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
                         ::memcpy(rightNode.items, leftNode.items, sizeof(leftNode.items[0]) * leftNode.numItems);
@@ -383,7 +383,6 @@ struct BTreeCore : StorageBase {
                         leftNode.numItems = 0;
                     } else {
                         // Rebalance from left to right
-                        std::cout << "REBAL (L->R) FROM " << crumb.nodePtr.nodeId << " TO " << node.nextLeaf << std::endl;
 
                         rebalance(leftNode, rightNode);
                     }
@@ -396,7 +395,6 @@ struct BTreeCore : StorageBase {
 
                     if (totalItems <= MAX_JOIN) {
                         // Move all items into left
-                        std::cout << "MOVING ALL (L) FROM " << crumb.nodePtr.nodeId << " TO " << node.prevLeaf << std::endl;
 
                         ::memcpy(leftNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
 
@@ -411,7 +409,6 @@ struct BTreeCore : StorageBase {
                     } else {
                         // Rebalance from right to left
 
-                        std::cout << "REBAL (R->L) " << node.prevLeaf << " / " << crumb.nodePtr.nodeId << std::endl;
                         rebalance(leftNode, rightNode);
                     }
                 }
@@ -423,7 +420,6 @@ struct BTreeCore : StorageBase {
 
                 needsRemove = true;
 
-                std::cout << "DEL NODE " << crumb.nodePtr.nodeId << std::endl;
                 deleteNode(crumb.nodePtr.nodeId);
             }
         }
@@ -435,7 +431,6 @@ struct BTreeCore : StorageBase {
 
             if (node.numItems == 1 && node.items[0].nodeId) {
                 setRootNodeId(node.items[0].nodeId);
-                std::cout << "DEL ROOT NODE " << rootNodeId << std::endl;
                 deleteNode(rootNodeId);
             }
         }
