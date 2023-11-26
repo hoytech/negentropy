@@ -50,7 +50,7 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
     auto &node = nodePtr.get();
 
     if (node.numItems == 0) throw err("verify: empty node");
-    if (depth > 0 && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
+    if (node.nextSibling && node.numItems < MIN_ITEMS) throw err("verify: too few items in node");
     if (node.numItems > MAX_ITEMS) throw err("verify: too many items");
 
     if (node.items[0].nodeId == 0) {
@@ -111,16 +111,16 @@ inline void verify(BTreeCore &btree, bool checkMemLeaks = false) {
         uint64_t i = 0, totalItems = 0;
         auto nodePtr = btree.getNodeRead(ctx.leafNodeIds[0]);
         std::optional<Item> prevItem;
-        uint64_t prevLeaf = 0;
+        uint64_t prevSibling = 0;
 
         while (nodePtr.exists()) {
             auto &node = nodePtr.get();
             if (nodePtr.nodeId != ctx.leafNodeIds[i]) throw err("verify: leaf id mismatch");
 
-            if (prevLeaf != node.prevLeaf) throw err("verify: prevLeaf mismatch");
-            prevLeaf = nodePtr.nodeId;
+            if (prevSibling != node.prevSibling) throw err("verify: prevSibling mismatch");
+            prevSibling = nodePtr.nodeId;
 
-            nodePtr = btree.getNodeRead(node.nextLeaf);
+            nodePtr = btree.getNodeRead(node.nextSibling);
             i++;
 
             for (size_t j = 0; j < node.numItems; j++) {

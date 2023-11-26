@@ -8,15 +8,48 @@ namespace negentropy { namespace storage { namespace btree {
 
 using err = std::runtime_error;
 
+/*
+
+Except for the right-most nodes in the tree at each level (which includes the root node), all nodes
+contain at least MIN_ITEMS and at most MAX_ITEMS.
+
+If a node falls below MIN_ITEMS, a neighbour node (which always has the same parent) is selected.
+  * If between the two nodes there are REBALANCE_THRESHOLD or fewer total items, all items are
+    moved into one node and the other is deleted.
+  * If there are more than REBALANCE_THRESHOLD total items, then the items are divided into two
+    approximately equal-sized halves.
+
+If a node goes above MAX_ITEMS then a new neighbour node is created.
+  * If the node is the right-most in its level, pack the old node to MAX_ITEMS, and move the rest
+    into the new neighbour. This optimises space-usage in the case of append workloads.
+  * Otherwise, split the node into two approximately equal-sized halves.
+
+*/
+
+
 #ifdef NE_FUZZ_TEST
+
+// Fuzz test mode: Causes a large amount of tree structure changes like splitting, moving, and rebalancing
+
 const size_t MIN_ITEMS = 2;
-const size_t MAX_JOIN = 4;
+const size_t REBALANCE_THRESHOLD = 4;
 const size_t MAX_ITEMS = 6;
+
 #else
+
+// Production mode: Nodes fit into 4k pages, and oscillating insert/erase will not cause tree structure changes
+
 const size_t MIN_ITEMS = 30;
-const size_t MAX_JOIN = 60;
+const size_t REBALANCE_THRESHOLD = 60;
 const size_t MAX_ITEMS = 80;
+
 #endif
+
+static_assert(MIN_ITEMS < REBALANCE_THRESHOLD);
+static_assert(REBALANCE_THRESHOLD < MAX_ITEMS);
+static_assert(MAX_ITEMS / 2 > MIN_ITEMS);
+static_assert(MIN_ITEMS % 2 == 0 && REBALANCE_THRESHOLD % 2 == 0 && MAX_ITEMS % 2 == 0);
+
 
 struct Key {
     Item item;
@@ -35,8 +68,8 @@ inline bool operator<(const Key &a, const Key &b) {
 struct Node {
     uint64_t numItems; // Number of items in this Node
     uint64_t accumCount; // Total number of items in or under this Node
-    uint64_t nextLeaf; // Pointer to next leaf in this level
-    uint64_t prevLeaf; // Pointer to previous leaf in this level
+    uint64_t nextSibling; // Pointer to next node in this level
+    uint64_t prevSibling; // Pointer to previous node in this level
 
     Accumulator accum;
 
@@ -186,8 +219,16 @@ struct BTreeCore : StorageBase {
 
                 left.accum.setToZero();
                 left.accumCount = 0;
-                left.numItems = (MAX_ITEMS / 2) + 1;
-                right.numItems = MAX_ITEMS / 2;
+
+                if (!left.nextSibling) {
+                    // If right-most node, pack as tightly as possible to optimise for append workloads
+                    left.numItems = MAX_ITEMS;
+                    right.numItems = 1;
+                } else {
+                    // Otherwise, split the node equally
+                    left.numItems = (MAX_ITEMS / 2) + 1;
+                    right.numItems = MAX_ITEMS / 2;
+                }
 
                 for (size_t i = 0; i < left.numItems; i++) {
                     addToAccum(left.items[i], left);
@@ -200,13 +241,13 @@ struct BTreeCore : StorageBase {
 
                 for (size_t i = left.numItems; i < MAX_ITEMS + 1; i++) left.items[i].setToZero();
 
-                right.nextLeaf = left.nextLeaf;
-                left.nextLeaf = rightPtr.nodeId;
-                right.prevLeaf = crumb.nodePtr.nodeId;
+                right.nextSibling = left.nextSibling;
+                left.nextSibling = rightPtr.nodeId;
+                right.prevSibling = crumb.nodePtr.nodeId;
 
-                if (right.nextLeaf) {
-                    auto &rightRight = getNodeWrite(right.nextLeaf).get();
-                    rightRight.prevLeaf = rightPtr.nodeId;
+                if (right.nextSibling) {
+                    auto &rightRight = getNodeWrite(right.nextSibling).get();
+                    rightRight.prevSibling = rightPtr.nodeId;
                 }
 
                 newKey = { right.items[0].item, rightPtr.nodeId };
@@ -364,10 +405,10 @@ struct BTreeCore : StorageBase {
                     // Use neighbour to the right
 
                     auto &leftNode = node;
-                    auto &rightNode = getNodeWrite(node.nextLeaf).get();
+                    auto &rightNode = getNodeWrite(node.nextSibling).get();
                     size_t totalItems = leftNode.numItems + rightNode.numItems;
 
-                    if (totalItems <= MAX_JOIN) {
+                    if (totalItems <= REBALANCE_THRESHOLD) {
                         // Move all items into right
 
                         ::memmove(rightNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
@@ -377,8 +418,8 @@ struct BTreeCore : StorageBase {
                         rightNode.accumCount += leftNode.accumCount;
                         rightNode.accum.add(leftNode.accum);
 
-                        if (leftNode.prevLeaf) getNodeWrite(leftNode.prevLeaf).get().nextLeaf = leftNode.nextLeaf;
-                        rightNode.prevLeaf = leftNode.prevLeaf;
+                        if (leftNode.prevSibling) getNodeWrite(leftNode.prevSibling).get().nextSibling = leftNode.nextSibling;
+                        rightNode.prevSibling = leftNode.prevSibling;
 
                         leftNode.numItems = 0;
                     } else {
@@ -389,11 +430,11 @@ struct BTreeCore : StorageBase {
                 } else {
                     // Use neighbour to the left
 
-                    auto &leftNode = getNodeWrite(node.prevLeaf).get();
+                    auto &leftNode = getNodeWrite(node.prevSibling).get();
                     auto &rightNode = node;
                     size_t totalItems = leftNode.numItems + rightNode.numItems;
 
-                    if (totalItems <= MAX_JOIN) {
+                    if (totalItems <= REBALANCE_THRESHOLD) {
                         // Move all items into left
 
                         ::memcpy(leftNode.items + leftNode.numItems, rightNode.items, sizeof(rightNode.items[0]) * rightNode.numItems);
@@ -402,8 +443,8 @@ struct BTreeCore : StorageBase {
                         leftNode.accumCount += rightNode.accumCount;
                         leftNode.accum.add(rightNode.accum);
 
-                        if (rightNode.nextLeaf) getNodeWrite(rightNode.nextLeaf).get().prevLeaf = rightNode.prevLeaf;
-                        leftNode.nextLeaf = rightNode.nextLeaf;
+                        if (rightNode.nextSibling) getNodeWrite(rightNode.nextSibling).get().prevSibling = rightNode.prevSibling;
+                        leftNode.nextSibling = rightNode.nextSibling;
 
                         rightNode.numItems = 0;
                     } else {
@@ -415,8 +456,8 @@ struct BTreeCore : StorageBase {
             }
 
             if (node.numItems == 0) {
-                if (node.prevLeaf) getNodeWrite(node.prevLeaf).get().nextLeaf = node.nextLeaf;
-                if (node.nextLeaf) getNodeWrite(node.nextLeaf).get().prevLeaf = node.prevLeaf;
+                if (node.prevSibling) getNodeWrite(node.prevSibling).get().nextSibling = node.nextSibling;
+                if (node.nextSibling) getNodeWrite(node.nextSibling).get().prevSibling = node.prevSibling;
 
                 needsRemove = true;
 
@@ -523,7 +564,7 @@ struct BTreeCore : StorageBase {
                 if (!cb(currNode->items[index].item, begin + i)) return;
                 index++;
                 if (index >= currNode->numItems) {
-                    currNode = getNodeRead(currNode->nextLeaf).p;
+                    currNode = getNodeRead(currNode->nextSibling).p;
                     index = 0;
                 }
             }
