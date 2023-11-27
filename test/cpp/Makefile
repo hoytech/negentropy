@@ -3,3 +3,6 @@ harness: harness.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/neg
 
 btreeFuzz: btreeFuzz.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/*
 	g++ -DNE_FUZZ_TEST -g -Wall -std=c++20 -I../../cpp/ -I ./hoytech-cpp/ -I lmdbxx/include/ btreeFuzz.cpp -lcrypto -llmdb -o btreeFuzz
+
+measureSpaceUsage: measureSpaceUsage.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/*
+	g++ -DNE_FUZZ_TEST -g -Wall -std=c++20 -I../../cpp/ -I ./hoytech-cpp/ -I lmdbxx/include/ measureSpaceUsage.cpp -lcrypto -llmdb -o measureSpaceUsage

@@ -1,2 +1,5 @@
 /harness
 /btreeFuzz
+/measureSpaceUsage
+
+/testdb/
