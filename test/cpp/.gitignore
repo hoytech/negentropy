@@ -1,5 +1,6 @@
 /harness
 /btreeFuzz
 /measureSpaceUsage
+/lmdbTest
 
 /testdb/

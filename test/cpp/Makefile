@@ -1,8 +1,19 @@
-harness: harness.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/* ../../cpp/negentropy/storage/btree/*
-	g++ -g -Wall -std=c++20 -I../../cpp/ -I ./hoytech-cpp/ harness.cpp -lcrypto -o harness
+W        = -Wall
+OPT      = -g
+STD      = -std=c++20
+CXXFLAGS = $(STD) $(OPT) $(W) -fPIC $(XCXXFLAGS)
+INCS     = -I../../cpp/ -I./hoytech-cpp/ -Ilmdbxx/include/
 
-btreeFuzz: btreeFuzz.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/*
-	g++ -DNE_FUZZ_TEST -g -Wall -std=c++20 -I../../cpp/ -I ./hoytech-cpp/ -I lmdbxx/include/ btreeFuzz.cpp -lcrypto -llmdb -o btreeFuzz
+DEPS = ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/* ../../cpp/negentropy/storage/btree/*
 
-measureSpaceUsage: measureSpaceUsage.cpp ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/*
-	g++ -DNE_FUZZ_TEST -g -Wall -std=c++20 -I../../cpp/ -I ./hoytech-cpp/ -I lmdbxx/include/ measureSpaceUsage.cpp -lcrypto -llmdb -o measureSpaceUsage
+harness: harness.cpp
+	$(CXX) $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -o $@
+
+btreeFuzz: btreeFuzz.cpp
+	$(CXX) $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -llmdb -o $@
+
+lmdbTest: lmdbTest.cpp
+	$(CXX) $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -llmdb -o $@
+
+measureSpaceUsage: measureSpaceUsage.cpp
+	$(CXX) -DNE_FUZZ_TEST $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -llmdb -o $@
