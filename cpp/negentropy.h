@@ -49,7 +49,7 @@ struct Negentropy {
         std::string output;
         output.push_back(PROTOCOL_VERSION);
 
-        output += splitRange(0, storage.size(), Bound(0), Bound(MAX_U64));
+        output += splitRange(0, storage.size(), Bound(MAX_U64));
 
         return output;
     }
@@ -99,7 +99,7 @@ struct Negentropy {
                 }
             };
 
-            auto currBound = decodeBound(query, lastTimestampIn);
+            auto currBound = decodeBound(query);
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
@@ -113,7 +113,7 @@ struct Negentropy {
 
                 if (theirFingerprint != ourFingerprint.sv()) {
                     doSkip();
-                    o += splitRange(lower, upper, prevBound, currBound);
+                    o += splitRange(lower, upper, currBound);
                 } else {
                     skip = true;
                 }
@@ -155,7 +155,7 @@ struct Negentropy {
                     Bound endBound = currBound;
 
                     storage.iterate(lower, upper, [&](const Item &item, size_t index){
-                        if (frameSizeLimit && fullOutput.size() + responseIds.size() > frameSizeLimit - 200) {
+                        if (exceededFrameSizeLimit(fullOutput.size() + responseIds.size())) {
                             endBound = Bound(item);
                             upper = index; // shrink upper so that remaining range gets correct fingerprint
                             return false;
@@ -178,9 +178,9 @@ struct Negentropy {
                 throw negentropy::err("unexpected mode");
             }
 
-            if (frameSizeLimit && fullOutput.size() + o.size() > frameSizeLimit - 200) {
+            if (exceededFrameSizeLimit(fullOutput.size() + o.size())) {
                 // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
-                auto remainingFingerprint = storage.fingerprint(upper, storage.size());
+                auto remainingFingerprint = storage.fingerprint(upper, storageSize);
 
                 fullOutput += encodeBound(Bound(MAX_U64));
                 fullOutput += encodeVarInt(uint64_t(Mode::Fingerprint));
@@ -197,7 +197,7 @@ struct Negentropy {
         return fullOutput;
     }
 
-    std::string splitRange(size_t lower, size_t upper, const Bound &lowerBound, const Bound &upperBound) {
+    std::string splitRange(size_t lower, size_t upper, const Bound &upperBound) {
         std::string o;
 
         uint64_t numElems = upper - lower;
@@ -216,29 +216,30 @@ struct Negentropy {
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;
-            auto prevBound = Bound(storage.getItem(curr));
 
             for (uint64_t i = 0; i < buckets; i++) {
                 auto bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
                 auto ourFingerprint = storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                auto nextPrevBound = curr == upper ? upperBound : getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr));
+                auto nextBound = curr == upper ? upperBound : getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr));
 
-                o += encodeBound(nextPrevBound);
+                o += encodeBound(nextBound);
                 o += encodeVarInt(uint64_t(Mode::Fingerprint));
                 o += ourFingerprint.sv();
-
-                prevBound = nextPrevBound;
             }
         }
 
         return o;
     }
 
+    bool exceededFrameSizeLimit(size_t n) {
+        return frameSizeLimit && n > frameSizeLimit - 200;
+    }
+
     // Decoding
 
-    uint64_t decodeTimestampIn(std::string_view &encoded, uint64_t &lastTimestampIn) {
+    uint64_t decodeTimestampIn(std::string_view &encoded) {
         uint64_t timestamp = decodeVarInt(encoded);
         timestamp = timestamp == 0 ? MAX_U64 : timestamp - 1;
         timestamp += lastTimestampIn;
@@ -247,8 +248,8 @@ struct Negentropy {
         return timestamp;
     }
 
-    Bound decodeBound(std::string_view &encoded, uint64_t &lastTimestampIn) {
-        auto timestamp = decodeTimestampIn(encoded, lastTimestampIn);
+    Bound decodeBound(std::string_view &encoded) {
+        auto timestamp = decodeTimestampIn(encoded);
         auto len = decodeVarInt(encoded);
         return Bound(timestamp, getBytes(encoded, len));
     }
