@@ -271,7 +271,7 @@ class Negentropy {
         let output = new WrappedBuffer();
         output.extend([ PROTOCOL_VERSION ]);
 
-        await this.splitRange(0, this.storage.size(), this._bound(0), this._bound(Number.MAX_VALUE), output);
+        await this.splitRange(0, this.storage.size(), this._bound(Number.MAX_VALUE), output);
 
         return this._renderOutput(output);
     }
@@ -322,7 +322,7 @@ class Negentropy {
 
                 if (compareUint8Array(theirFingerprint, ourFingerprint) !== 0) {
                     doSkip();
-                    await this.splitRange(lower, upper, prevBound, currBound, o);
+                    await this.splitRange(lower, upper, currBound, o);
                 } else {
                     skip = true;
                 }
@@ -364,7 +364,7 @@ class Negentropy {
                     let endBound = currBound;
 
                     this.storage.iterate(lower, upper, (item, index) => {
-                        if (this.frameSizeLimit && fullOutput.length + responseIds.length > this.frameSizeLimit - 200) {
+                        if (this.exceededFrameSizeLimit(fullOutput.length + responseIds.length)) {
                             endBound = item;
                             upper = index; // shrink upper so that remaining range gets correct fingerprint
                             return false;
@@ -387,9 +387,9 @@ class Negentropy {
                 throw Error("unexpected mode");
             }
 
-            if (this.frameSizeLimit && fullOutput.length + o.length > this.frameSizeLimit - 200) {
+            if (this.exceededFrameSizeLimit(fullOutput.length + o.length)) {
                 // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
-                let remainingFingerprint = await this.storage.fingerprint(upper, this.storage.size());
+                let remainingFingerprint = await this.storage.fingerprint(upper, storageSize);
 
                 fullOutput.extend(this.encodeBound(this._bound(Number.MAX_VALUE)));
                 fullOutput.extend(encodeVarInt(Mode.Fingerprint));
@@ -406,7 +406,7 @@ class Negentropy {
         return [fullOutput.length === 1 && this.isInitiator ? null : this._renderOutput(fullOutput), haveIds, needIds];
     }
 
-    async splitRange(lower, upper, lowerBound, upperBound, o) {
+    async splitRange(lower, upper, upperBound, o) {
         let numElems = upper - lower;
         let buckets = 16;
 
@@ -423,20 +423,17 @@ class Negentropy {
             let itemsPerBucket = Math.floor(numElems / buckets);
             let bucketsWithExtra = numElems % buckets;
             let curr = lower;
-            let prevBound = this.storage.getItem(curr);
 
             for (let i = 0; i < buckets; i++) {
                 let bucketSize = itemsPerBucket + (i < bucketsWithExtra ? 1 : 0);
                 let ourFingerprint = await this.storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                let nextPrevBound = curr === upper ? upperBound : this.getMinimalBound(this.storage.getItem(curr - 1), this.storage.getItem(curr));
+                let nextBound = curr === upper ? upperBound : this.getMinimalBound(this.storage.getItem(curr - 1), this.storage.getItem(curr));
 
-                o.extend(this.encodeBound(nextPrevBound));
+                o.extend(this.encodeBound(nextBound));
                 o.extend(encodeVarInt(Mode.Fingerprint));
                 o.extend(ourFingerprint);
-
-                prevBound = nextPrevBound;
             }
         }
     }
@@ -445,6 +442,10 @@ class Negentropy {
         o = o.unwrap();
         if (!this.wantUint8ArrayOutput) o = uint8ArrayToHex(o);
         return o;
+    }
+
+    exceededFrameSizeLimit(n) {
+        return this.frameSizeLimit && n > this.frameSizeLimit - 200;
     }
 
     // Decoding
