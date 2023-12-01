@@ -17,6 +17,10 @@ struct Vector : StorageBase {
         items.emplace_back(createdAt, id);
     }
 
+    void insert(const Item &item) {
+        addItem(item.timestamp, item.getId());
+    }
+
     void seal() {
         if (sealed) throw negentropy::err("already sealed");
         sealed = true;

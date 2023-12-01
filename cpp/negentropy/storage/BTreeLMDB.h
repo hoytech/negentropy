@@ -128,6 +128,8 @@ struct BTreeLMDB : btree::BTreeCore {
 
         lmdb::txn childTxn(nullptr);
 
+        ctx->readOnly = readOnly;
+
         if (readOnly) {
             ctx->txn = &parentTxn;
         } else {

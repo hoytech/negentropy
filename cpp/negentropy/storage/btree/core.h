@@ -486,6 +486,10 @@ struct BTreeCore : StorageBase {
         insert(Item(createdAt, id));
     }
 
+    void eraseItem(uint64_t createdAt, std::string_view id) {
+        erase(Item(createdAt, id));
+    }
+
     void seal() {
     }
 
