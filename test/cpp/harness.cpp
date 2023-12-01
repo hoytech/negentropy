@@ -29,8 +29,8 @@ int main() {
     uint64_t frameSizeLimit = 0;
     if (::getenv("FRAMESIZELIMIT")) frameSizeLimit = std::stoull(::getenv("FRAMESIZELIMIT"));
 
-    negentropy::storage::BTreeMem storage;
-    std::unique_ptr<Negentropy> ne;
+    negentropy::storage::Vector storage;
+    std::unique_ptr<Negentropy<negentropy::storage::Vector>> ne;
 
     std::string line;
     while (std::cin) {
@@ -46,7 +46,7 @@ int main() {
             storage.addItem(created, id);
         } else if (items[0] == "seal") {
             storage.seal();
-            ne = std::make_unique<Negentropy>(storage, frameSizeLimit);
+            ne = std::make_unique<Negentropy<negentropy::storage::Vector>>(storage, frameSizeLimit);
         } else if (items[0] == "initiate") {
             auto q = ne->initiate();
             if (frameSizeLimit && q.size() > frameSizeLimit) throw hoytech::error("initiate frameSizeLimit exceeded: ", q.size(), " > ", frameSizeLimit);

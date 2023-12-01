@@ -29,8 +29,9 @@ using err = std::runtime_error;
 
 
 
+template<typename StorageImpl>
 struct Negentropy {
-    StorageBase &storage;
+    StorageImpl &storage;
     uint64_t frameSizeLimit;
 
     bool isInitiator = false;
@@ -38,7 +39,7 @@ struct Negentropy {
     uint64_t lastTimestampIn = 0;
     uint64_t lastTimestampOut = 0;
 
-    Negentropy(StorageBase &storage, uint64_t frameSizeLimit = 0) : storage(storage), frameSizeLimit(frameSizeLimit) {
+    Negentropy(StorageImpl &storage, uint64_t frameSizeLimit = 0) : storage(storage), frameSizeLimit(frameSizeLimit) {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
     }
 
@@ -300,4 +301,5 @@ struct Negentropy {
 }
 
 
-using Negentropy = negentropy::Negentropy;
+template<typename T>
+using Negentropy = negentropy::Negentropy<T>;
