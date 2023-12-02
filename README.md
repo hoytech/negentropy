@@ -207,102 +207,40 @@ The amount of bandwidth consumed will grow linearly with the number of differenc
 
 
 
-## Reference Implementation APIs
+## Implementations
 
-### C++
+This section lists all the currently-known negentropy implementations. If you know of a new one, please let us know by [opening an issue](https://github.com/hoytech/negentropy/issues/new).
 
-The library is contained in a single-header with the only dependency being OpenSSL (for SHA-256):
+| **Language** | **Author** | **Status** | **Storage** |
+|--------------|------------|-------------|
+| [C++](cpp/README.md) | reference | Stable | Vector, BTreeMem, BTreeLMDB |
+| [Javascript](js/README.md) | reference | Stable | Vector |
+| [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
 
-    #include "Negentropy.h"
+### Testing
 
-First, create a `Negentropy` object. The `16` argument is `idSize` and which is followed by an optional `frameSizeLimit`:
+There is a conformance test-suite available in the `testing` directory.
 
-    Negentropy ne(16, 50'000);
+In order to test a new language you must create a "harness", which is a basic stdio line-based adapter for your implementation. See the [test/cpp/harness.cpp](test/cpp/harness.cpp) and [test/js/harness.js](test/js/harness.js) files for examples. Next, edit the file `test/Utils.pm` and configure how your harness should be invoked.
 
-Next, add all the items in your collection, and `seal()`:
+Harnesses may require some setup before they are usable. For example, you need to run `make` within the `test/cpp/` directory.
 
-    for (const auto &item : myItems) {
-        ne.addItem(item.timestamp(), item.id());
-    }
+Once setup, you should be able to run something like `perl test.pl cpp,js` from the `test/` directory. This will perform the following:
 
-    ne.seal();
+* For each combination of language run the follwing fuzz tests:
+  * Client has all records
+  * Server has all records
+  * Both have all records
+  * Client is missing some and server is missing some
 
-On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete:
+The test is repeated using each language as both the client and the server.
 
-    std::string msg = ne.initiate();
+Afterwards, a different fuzz test is run for each language in isolation, and the exact protocol output is stored for each language. These are compared to ensure they are byte-wise identical.
 
-    while (true) {
-        std::string response = queryServer(msg);
+Finally, a protocol upgrade test is run for each language to ensure that when run as a server it correctly indicates to the client when it cannot handle a specific protocol version.
 
-        std::vector<std::string> have, need;
-        std::optional<std::string> newMsg = ne.reconcile(response, have, need);
+* For the Rust implementation, check out its repo in the same directory as the `negentropy` repo, build the `harness` commands for both C++ and Rust, and then inside `negentropy/test/` directory running `perl test.pl cpp,rust`
 
-        // handle have/need
-
-        if (!newMsg) break; // done
-        else std::swap(msg, *newMsg);
-    }
-
-In each loop iteration, `have` contains IDs that the client has that the server doesn't, and `need` contains IDs that the server has that the client doesn't.
-
-The server-side is similar, except it doesn't create an initial message, there are no `have`/`need` arrays, and it doesn't return an optional (servers must always reply to a request):
-
-    while (true) {
-        std::string msg = receiveMsgFromClient();
-        std::string response = ne.reconcile(msg);
-        respondToClient(response);
-    }
-
-### Javascript
-
-The library is contained in a single javascript file. It shouldn't need any dependencies, in either a browser or node.js:
-
-    const Negentropy = require('Negentropy.js');
-
-First, create a `Negentropy` object. The `16` argument is `idSize` and which is followed by an optional `frameSizeLimit`:
-
-    let ne = new Negentropy(16, 50000);
-
-Next, add all the items in your collection, and `seal()`:
-
-    for (let item of myItems) {
-        ne.addItem(item.timestamp(), item.id());
-    }
-
-    ne.seal();
-
-*  `timestamp` should be a JS `Number`
-*  `id` should be a hex string, `Uint8Array`, or node.js `Buffer`
-
-On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete (signified by returning `null` for `newMsg`):
-
-    let msg = await ne.initiate();
-
-    while (msg.length !== null) {
-        let response = queryServer(msg);
-        let [newMsg, have, need] = await ne.reconcile(msg);
-        msg = newMsg;
-        // handle have/need
-    }
-
-*  The output `msg`s and the IDs in `have`/`need` are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
-
-The server-side is similar, except it doesn't create an initial message, there are no `have`/`need` arrays, and `newMsg` will never be `null`:
-
-    while (1) {
-        let msg = receiveMsgFromClient();
-        let [newMsg] = await ne.reconcile(msg);
-        respondToClient(newMsg);
-    }
-
-* The `initiate()` and `reconcile()` methods are async because the `crypto.subtle.digest()` browser API is async.
-* Timestamp values greater than `Number.MAX_VALUE` will currently cause failures.
-
-### Rust
-
-A third-party Rust implementation by Yuki Kishimoto is available in the [rust-negentropy](https://github.com/yukibtc/rust-negentropy) repository.
-
-The reference test suite can be run against this implementation by checking it out in the same directory as the `negentropy` repo, building the `harness` commands for both C++ and Rust, and then inside `negentropy/test/` directory running `perl test.pl cpp,rust`
 
 
 
