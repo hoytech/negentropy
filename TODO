@@ -1,11 +1,12 @@
-test LMDB with reconcilation testing framework
 do edits to article
-update docs for API, how to use btree/LMDB
 strfry integration
+update rust tests
+normalise addItem/insertItem/insert
 
-update rust impl
 
 randomisation
+
+release js package to npm
 
 ? coalesce Idlist ranges in buildOutput
   - at least empty ones! for example when P1=1 P2=0 P3=0
