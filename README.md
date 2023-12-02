@@ -153,13 +153,13 @@ IDs are represented as byte-strings of length `32`:
 
 A range consists of an upper bound, a mode, and a payload (determined by mode):
 
-    Range := <upperBound (Bound)> <mode (Varint)> <Skip | Fingerprint | IdList>
+    Range := <upperBound (Bound)> <mode (Varint)> <payload (Skip | Fingerprint | IdList)>
 
 * If `mode = 0`, then payload is `Skip`, which is simply empty:
 
       Skip :=
 
-* If `mode = 1`, then payload is `Fingerprint`, the SHA-256 hash of all the IDs in this range sorted ascending by `(timestamp,id)` and truncated to `idSize`:
+* If `mode = 1`, then payload is `Fingerprint`, the [fingerprint](#fingerprints) of all the IDs in this range:
 
       Fingerprint := Byte{16}
 
@@ -217,6 +217,8 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 
 ## Use-Cases
 
+This section lists the currently-known production use-cases for negentropy. If you know of a new one, please let us know by [opening an issue](https://github.com/hoytech/negentropy/issues/new).
+
 * [Bandwidth-efficient Nostr event syncing](https://github.com/hoytech/strfry/blob/next/docs/negentropy.md)
 
 
@@ -225,3 +227,5 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 (C) 2023 Doug Hoyte
 
 Protocol specification, reference implementations, and tests are MIT licensed.
+
+Negentropy is a [Log Periodic](https://logperiodic.com) project.
