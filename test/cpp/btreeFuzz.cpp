@@ -22,14 +22,14 @@ struct Verifier {
 
     void insert(negentropy::storage::btree::BTreeCore &btree, uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, (unsigned char)(timestamp % 256)));
-        btree.insert(item);
+        btree.insertItem(item);
         addedTimestamps.insert(timestamp);
         doVerify(btree);
     }
 
     void erase(negentropy::storage::btree::BTreeCore &btree, uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, (unsigned char)(timestamp % 256)));
-        btree.erase(item);
+        btree.eraseItem(item);
         addedTimestamps.erase(timestamp);
         doVerify(btree);
     }

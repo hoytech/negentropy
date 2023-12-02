@@ -1,5 +1,5 @@
 W        = -Wall
-OPT      = -g
+OPT      = -g -O2
 STD      = -std=c++20
 CXXFLAGS = $(STD) $(OPT) $(W) -fPIC $(XCXXFLAGS)
 INCS     = -I../../cpp/ -I./hoytech-cpp/ -Ilmdbxx/include/
@@ -17,3 +17,9 @@ lmdbTest: lmdbTest.cpp
 
 measureSpaceUsage: measureSpaceUsage.cpp
 	$(CXX) -DNE_FUZZ_TEST $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -llmdb -o $@
+
+
+.PHONY: clean
+
+clean:
+	rm -f harness btreeFuzz lmdbTest measureSpaceUsage

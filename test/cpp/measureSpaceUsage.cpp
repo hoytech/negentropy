@@ -37,10 +37,10 @@ int main() {
     {
         auto txn = lmdb::txn::begin(env);
 
-        btree.withWriteTxn(txn, [&]{
+        btree.withWriteTxn(txn, 0, [&]{
             auto add = [&](uint64_t timestamp){
                 negentropy::Item item(timestamp, std::string(32, '\x01'));
-                btree.insert(item);
+                btree.insertItem(item);
             };
 
             for (size_t i = 1; i < 100'000; i++) add(i);

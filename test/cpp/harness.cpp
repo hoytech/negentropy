@@ -43,7 +43,7 @@ int main() {
             if (items.size() != 3) throw hoytech::error("wrong num of fields");
             uint64_t created = std::stoull(items[1]);
             auto id = hoytech::from_hex(items[2]);
-            storage.addItem(created, id);
+            storage.insert(created, id);
         } else if (items[0] == "seal") {
             storage.seal();
             ne = std::make_unique<Negentropy<negentropy::storage::Vector>>(storage, frameSizeLimit);

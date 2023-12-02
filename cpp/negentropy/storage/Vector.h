@@ -11,14 +11,14 @@ struct Vector : StorageBase {
     std::vector<Item> items;
     bool sealed = false;
 
-    void addItem(uint64_t createdAt, std::string_view id) {
+    void insert(uint64_t createdAt, std::string_view id) {
         if (sealed) throw negentropy::err("already sealed");
         if (id.size() != ID_SIZE) throw negentropy::err("bad id size for added item");
         items.emplace_back(createdAt, id);
     }
 
-    void insert(const Item &item) {
-        addItem(item.timestamp, item.getId());
+    void insertItem(const Item &item) {
+        insert(item.timestamp, item.getId());
     }
 
     void seal() {
@@ -30,6 +30,10 @@ struct Vector : StorageBase {
         for (size_t i = 1; i < items.size(); i++) {
             if (items[i - 1] == items[i]) throw negentropy::err("duplicate item inserted");
         }
+    }
+
+    void unseal() {
+        sealed = false;
     }
 
     uint64_t size() {

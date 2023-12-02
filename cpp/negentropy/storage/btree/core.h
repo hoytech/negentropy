@@ -156,9 +156,13 @@ struct BTreeCore : StorageBase {
     }
 
 
-    //// Insertion
+    //// Insert
 
-    void insert(const Item &newItem) {
+    void insert(uint64_t createdAt, std::string_view id) {
+        insertItem(Item(createdAt, id));
+    }
+
+    void insertItem(const Item &newItem) {
         // Make root leaf in case it doesn't exist
 
         auto rootNodeId = getRootNodeId();
@@ -285,7 +289,15 @@ struct BTreeCore : StorageBase {
         }
     }
 
-    void erase(const Item &oldItem) {
+
+
+    /// Erase
+
+    void erase(uint64_t createdAt, std::string_view id) {
+        eraseItem(Item(createdAt, id));
+    }
+
+    void eraseItem(const Item &oldItem) {
         auto rootNodeId = getRootNodeId();
         if (!rootNodeId) throw err("not found");
 
@@ -482,15 +494,10 @@ struct BTreeCore : StorageBase {
 
     //// Compat with the vector interface
 
-    void addItem(uint64_t createdAt, std::string_view id) {
-        insert(Item(createdAt, id));
-    }
-
-    void eraseItem(uint64_t createdAt, std::string_view id) {
-        erase(Item(createdAt, id));
-    }
-
     void seal() {
+    }
+
+    void unseal() {
     }
 
 

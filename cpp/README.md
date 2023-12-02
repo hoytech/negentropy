@@ -14,12 +14,12 @@ All the elements are put into a contiguous vector in memory, and are then sorted
 
     #include "negentropy/storage/Vector.h"
 
-To use `Vector`, add all your items with `addItem` and then call `seal`:
+To use `Vector`, add all your items with `insert` and then call `seal`:
 
     negentropy::storage::Vector storage;
 
     for (const auto &item : myItems) {
-        storage.addItem(item.timestamp(), item.id());
+        storage.insert(timestamp, id);
     }
 
     storage.seal();
@@ -37,13 +37,13 @@ To use `BTreeMem`, items can be added in the same way as with `Vector`, however 
     negentropy::storage::BTreeMem storage;
 
     for (const auto &item : myItems) {
-        storage.addItem(item.timestamp(), item.id());
+        storage.insert(timestamp, id);
     }
 
 More items can be added at any time, and items can be removed with `eraseItem`:
 
-    storage.addItem(timestamp, id);
-    storage.eraseItem(timestamp, id);
+    storage.insert(timestamp, id);
+    storage.erase(timestamp, id);
 
 
 ### negentropy::storage::BTreeLMDB
@@ -72,7 +72,7 @@ Adding or remove items should be done with write transactions also. Use the `wit
         auto txn = lmdb::txn::begin(env);
 
         storage.withWriteTxn(txn, 300, [&]{
-            storage.addItem(timestamp, id);
+            storage.insert(timestamp, id);
         });
     }
 

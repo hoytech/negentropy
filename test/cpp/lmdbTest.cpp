@@ -107,11 +107,11 @@ int main() {
         auto txn = lmdb::txn::begin(env);
 
         btree.withWriteTxn(txn, 300, [&]{
-            btree.eraseItem(1044, packId(1044));
-            btree.eraseItem(1838, packId(1838));
+            btree.erase(1044, packId(1044));
+            btree.erase(1838, packId(1838));
 
-            btree.addItem(1555, packId(1555));
-            btree.addItem(99999, packId(99999));
+            btree.insert(1555, packId(1555));
+            btree.insert(99999, packId(99999));
         });
 
         txn.commit();
