@@ -10,6 +10,8 @@ This repo contains the protocol specification, reference implementations, and te
 * [Protocol](#protocol)
     * [Data Requirements](#data-requirements)
     * [Setup](#setup)
+    * [Ranges](#ranges)
+    * [Fingerprints](#fingerprints)
     * [Alternating Messages](#alternating-messages)
     * [Algorithm](#algorithm)
     * [Frame Size Limits](#frame-size-limits)
@@ -45,13 +47,13 @@ In order to use negentropy, you need to define some mappings from your data reco
 * `record -> ID`
   * Typically a cryptographic hash of the entire record
   * The ID must be 32 bytes in length
-  * Two different records should not have the same ID (satisfied by using a cryptographic hash)
-  * Two identical records should not have different IDs (records should be canonicalised prior to hashing, if necessary)
+  * Different records should not have the same ID (satisfied by using a cryptographic hash)
+  * Equivalent records should not have different IDs (records should be canonicalised prior to hashing, if necessary)
 * `record -> timestamp`
   * Although timestamp is the most obvious, any ordering criteria can be used. The protocol will be most efficient if records with similar timestamps are often downloaded/stored/generated together
   * Units can be anything (seconds, microseconds, etc) as long as they fit in an 64-bit unsigned integer
   * The largest 64-bit unsigned integer should be reserved as a special "infinity" value
-  * Timestamps do *not* need to be unique (different records can have the same timestamp). If necessary, `0` can be used as the timestamp for every record
+  * Timestamps do **not** need to be unique (different records can have the same timestamp). If necessary, `0` can be used as the timestamp for every record
 
 Negentropy does not support the concept of updating or changing a record while preserving its ID. This should instead be modelled as deleting the old record and inserting a new one.
 
@@ -61,18 +63,22 @@ The two parties engaged in the protocol are called the client and the server. Th
 
 Each party should begin by sorting their records in ascending order by timestamp. If the timestamps are equivalent, records should be sorted lexically by their IDs. This sorted array and contiguous slices of it are called *ranges*.
 
+For the purpose of this specification, we will assume that records are always stored in in-memory arrays. However, implementations may provide more advanced storage data-structures such as trees.
+
+### Ranges
+
 Because each side potentially has a different set of records, ranges cannot be referred to by their indices in one side's sorted array. Instead, they are specified by lower and upper *bounds*. A bound is a timestamp and a variable-length ID prefix. In order to reduce the sizes of reconciliation messages, ID prefixes are as short as possible while still being able to separate records from their predecessors in the sorted array. If two adjacent records have different timestamps, then the prefix for a bound between them is empty.
 
 Lower bounds are *inclusive* and upper bounds are *exclusive*, as is [typical in computer science](https://www.cs.utexas.edu/users/EWD/transcriptions/EWD08xx/EWD831.html). This means that given two adjacent ranges, the upper bound of the first is equal to the lower bound of the second. In order for a range to have full coverage over the universe of possible timestamps/IDs, the lower bound would have a 0 timestamp and all-0s ID, and the upper-bound would be the specially reserved "infinity" timestamp (max u64), and the ID doesn't matter.
 
+### Fingerprints
+
 The *fingerprint* of a range is computed with the following algorithm:
 
 * Compute the addition mod `2**256` of the element IDs (interpreted as 32-byte little-endian unsigned integers)
-* Concatenate with the number of elements, encoded as a [variable-length integer](#varint)
+* Concatenate with the number of elements in the range, encoded as a [variable-length integer](#varint)
 * Hash with SHA-256
 * Take the first 16 bytes
-
-For the purpose of this specification, we will assume that records are always stored in in-memory arrays, and that fingerprints are computed as needed. However, implementations may provide more advanced storage data-structures which allow more efficient fingerprint computation, such as trees.
 
 ### Alternating Messages
 
@@ -135,15 +141,15 @@ Each encoded bound consists of an encoded timestamp and a variable-length disamb
 
   Offsets are always non-negative since the upper bound's timestamp is always `>=` to the lower bound's timestamp, ranges in a message are always encoded in ascending order, and ranges never overlap.
 
-* The `idPrefix` parameter's size is encoded in `length`, and can be between `0` and `idSize` bytes, inclusive. Efficient implementations will use the shortest possible prefix needed to separate the first record of this range from the last record of the previous range. If these records' timestamps differ, then the length should be 0, otherwise it should be the byte-length of their common prefix plus 1.
+* The size of `idPrefix` is encoded in `length`, and can be between `0` and `32` bytes, inclusive. Efficient implementations will use the shortest possible prefix needed to separate the first record of this range from the last record of the previous range. If these records' timestamps differ, then the length should be 0, otherwise it should be the byte-length of their common ID-prefix plus 1.
 
-  If the `idPrefix` length is less than `idSize` then the omitted trailing bytes are filled with 0 bytes.
+  If the `idPrefix` length is less than `32` then the omitted trailing bytes are considered to be 0 bytes.
 
 ### Range
 
-IDs are represented as byte-strings truncated to length `idSize`:
+IDs are represented as byte-strings of length `32`:
 
-    Id := Byte{idSize}
+    Id := Byte{32}
 
 A range consists of an upper bound, a mode, and a payload (determined by mode):
 
@@ -155,7 +161,7 @@ A range consists of an upper bound, a mode, and a payload (determined by mode):
 
 * If `mode = 1`, then payload is `Fingerprint`, the SHA-256 hash of all the IDs in this range sorted ascending by `(timestamp,id)` and truncated to `idSize`:
 
-      Fingerprint := <Id>
+      Fingerprint := Byte{16}
 
 * If `mode = 2`, the payload is `IdList`, a variable-length list of all IDs within this range:
 
