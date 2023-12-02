@@ -21,9 +21,9 @@ This repo contains the protocol specification, reference implementations, and te
     * [Range](#range)
     * [Message](#message)
 * [Implementations](#implementations)
-    * [Testing](#testing)
+* [Testing](#testing)
 * [Use-Cases](#use-cases)
-* [Copyright](#copyright)
+* [Author](#author)
 
 <!-- END OF TOC -->
 
@@ -190,7 +190,8 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
 
 
-### Testing
+
+## Testing
 
 There is a conformance test-suite available in the `testing` directory.
 
@@ -215,6 +216,7 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 * For the Rust implementation, check out its repo in the same directory as the `negentropy` repo, build the `harness` commands for both C++ and Rust, and then inside `negentropy/test/` directory running `perl test.pl cpp,rust`
 
 
+
 ## Use-Cases
 
 This section lists the currently-known production use-cases for negentropy. If you know of a new one, please let us know by [opening an issue](https://github.com/hoytech/negentropy/issues/new).
@@ -222,7 +224,8 @@ This section lists the currently-known production use-cases for negentropy. If y
 * [Bandwidth-efficient Nostr event syncing](https://github.com/hoytech/strfry/blob/next/docs/negentropy.md)
 
 
-## Copyright
+
+## Author
 
 (C) 2023 Doug Hoyte
 
