@@ -211,11 +211,13 @@ The amount of bandwidth consumed will grow linearly with the number of differenc
 
 This section lists all the currently-known negentropy implementations. If you know of a new one, please let us know by [opening an issue](https://github.com/hoytech/negentropy/issues/new).
 
+
 | **Language** | **Author** | **Status** | **Storage** |
-|--------------|------------|-------------|
+| ---- | ---- | ---- | ---- |
 | [C++](cpp/README.md) | reference | Stable | Vector, BTreeMem, BTreeLMDB |
 | [Javascript](js/README.md) | reference | Stable | Vector |
 | [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
+
 
 ### Testing
 
