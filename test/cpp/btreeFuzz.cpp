@@ -67,6 +67,17 @@ int main() {
     Verifier v;
     negentropy::storage::BTreeMem btree;
 
+
+    // Return values
+
+    if (!btree.insert(100, std::string(32, '\x01'))) throw negentropy::err("didn't insert element?");
+    if (btree.insert(100, std::string(32, '\x01'))) throw negentropy::err("double inserted element?");
+    if (!btree.erase(100, std::string(32, '\x01'))) throw negentropy::err("didn't erase element?");
+    if (btree.erase(100, std::string(32, '\x01'))) throw negentropy::err("erased non-existing element?");
+
+
+    // Fuzz test: Insertion phase
+
     while (btree.size() < 5000) {
         if (rand() % 3 <= 1) {
             int timestamp;
@@ -85,6 +96,8 @@ int main() {
             v.erase(btree, *it);
         }
     }
+
+    // Fuzz test: Removal phase
 
     std::cout << "REMOVING ALL" << std::endl;
 

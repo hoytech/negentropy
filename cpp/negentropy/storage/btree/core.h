@@ -158,11 +158,11 @@ struct BTreeCore : StorageBase {
 
     //// Insert
 
-    void insert(uint64_t createdAt, std::string_view id) {
-        insertItem(Item(createdAt, id));
+    bool insert(uint64_t createdAt, std::string_view id) {
+        return insertItem(Item(createdAt, id));
     }
 
-    void insertItem(const Item &newItem) {
+    bool insertItem(const Item &newItem) {
         // Make root leaf in case it doesn't exist
 
         auto rootNodeId = getRootNodeId();
@@ -177,7 +177,7 @@ struct BTreeCore : StorageBase {
             newNode.accumCount = 1;
 
             setRootNodeId(newNodePtr.nodeId);
-            return;
+            return true;
         }
 
 
@@ -187,7 +187,7 @@ struct BTreeCore : StorageBase {
         bool found;
         auto breadcrumbs = searchItem(rootNodeId, newItem, found);
 
-        if (found) throw err("already inserted");
+        if (found) return false; // already inserted
 
 
         // Follow breadcrumbs back to root
@@ -287,26 +287,28 @@ struct BTreeCore : StorageBase {
 
             setRootNodeId(newRootPtr.nodeId);
         }
+
+        return true;
     }
 
 
 
     /// Erase
 
-    void erase(uint64_t createdAt, std::string_view id) {
-        eraseItem(Item(createdAt, id));
+    bool erase(uint64_t createdAt, std::string_view id) {
+        return eraseItem(Item(createdAt, id));
     }
 
-    void eraseItem(const Item &oldItem) {
+    bool eraseItem(const Item &oldItem) {
         auto rootNodeId = getRootNodeId();
-        if (!rootNodeId) throw err("not found");
+        if (!rootNodeId) return false;
 
 
         // Traverse interior nodes, leaving breadcrumbs along the way
 
         bool found;
         auto breadcrumbs = searchItem(rootNodeId, oldItem, found);
-        if (!found) throw err("not found");
+        if (!found) return false;
 
 
         // Remove from node
@@ -489,6 +491,8 @@ struct BTreeCore : StorageBase {
                 deleteNode(rootNodeId);
             }
         }
+
+        return true;
     }
 
 
