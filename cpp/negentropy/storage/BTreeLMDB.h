@@ -39,7 +39,7 @@ struct BTreeLMDB : btree::BTreeCore {
 
 
     void setup(lmdb::txn &txn, const std::string &tableName) {
-        dbi = lmdb::dbi::open(txn, tableName, MDB_CREATE | MDB_INTEGERKEY);
+        dbi = lmdb::dbi::open(txn, tableName, MDB_CREATE | MDB_REVERSEKEY);
     }
 
     struct Cleaner {
@@ -59,12 +59,12 @@ struct BTreeLMDB : btree::BTreeCore {
         }
     };
 
-    void withReadTxn(lmdb::txn &txn, const std::function<void()> &cb, uint64_t treeId = 0) {
-        _withTxn(txn, true, cb, treeId);
+    void withReadTxn(lmdb::txn &txn, uint64_t treeId, const std::function<void()> &cb) {
+        _withTxn(txn, true, treeId, cb);
     }
 
-    void withWriteTxn(lmdb::txn &txn, const std::function<void()> &cb, uint64_t treeId = 0) {
-        _withTxn(txn, false, cb, treeId);
+    void withWriteTxn(lmdb::txn &txn, uint64_t treeId, const std::function<void()> &cb) {
+        _withTxn(txn, false, treeId, cb);
     }
 
 
@@ -123,12 +123,13 @@ struct BTreeLMDB : btree::BTreeCore {
     // Internal utils
 
   private:
-    void _withTxn(lmdb::txn &parentTxn, bool readOnly, const std::function<void()> &cb, uint64_t treeId) {
+    void _withTxn(lmdb::txn &parentTxn, bool readOnly, uint64_t treeId, const std::function<void()> &cb) {
         ctx = TxnCtx{};
 
         lmdb::txn childTxn(nullptr);
 
         ctx->readOnly = readOnly;
+        ctx->treeId = treeId;
 
         if (readOnly) {
             ctx->txn = &parentTxn;
@@ -137,14 +138,12 @@ struct BTreeLMDB : btree::BTreeCore {
             ctx->txn = &childTxn;
         }
 
-        ctx->treeId = treeId;
-
         Cleaner cleaner(this);
 
         {
             static_assert(sizeof(MetaData) == 16);
             std::string_view v;
-            bool found = dbi.get(txn(), lmdb::to_sv<uint64_t>(0), v);
+            bool found = dbi.get(txn(), getKey(0), v);
             ctx->metaDataCache = found ? lmdb::from_sv<MetaData>(v) : MetaData{ 0, 1, };
         }
 
@@ -173,7 +172,7 @@ struct BTreeLMDB : btree::BTreeCore {
 
     std::string getKey(uint64_t n) {
         std::string k;
-        if (ctx->treeId) k += lmdb::to_sv<uint64_t>(ctx->treeId);
+        k += lmdb::to_sv<uint64_t>(ctx->treeId);
         k += lmdb::to_sv<uint64_t>(n);
         return k;
     }

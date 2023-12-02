@@ -52,7 +52,7 @@ int main() {
     {
         auto txn = lmdb::txn::begin(env);
 
-        btree.withWriteTxn(txn, [&]{
+        btree.withWriteTxn(txn, 300, [&]{
             auto add = [&](uint64_t timestamp){
                 negentropy::Item item(timestamp, packId(timestamp));
                 btree.insert(item);
@@ -72,7 +72,7 @@ int main() {
     {
         auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
 
-        btree.withReadTxn(txn, [&]{
+        btree.withReadTxn(txn, 300, [&]{
             //negentropy::storage::btree::dump(btree);
             negentropy::storage::btree::verify(btree);
         });
@@ -91,7 +91,7 @@ int main() {
         auto q = ne1.initiate();
         std::string q2;
 
-        btree.withReadTxn(txn, [&]{
+        btree.withReadTxn(txn, 300, [&]{
             q2 = ne2.reconcile(q);
         });
 
@@ -106,7 +106,7 @@ int main() {
     {
         auto txn = lmdb::txn::begin(env);
 
-        btree.withWriteTxn(txn, [&]{
+        btree.withWriteTxn(txn, 300, [&]{
             btree.eraseItem(1044, packId(1044));
             btree.eraseItem(1838, packId(1838));
 
@@ -133,7 +133,7 @@ int main() {
         while (true) {
             std::string response;
 
-            btree.withReadTxn(txn, [&]{
+            btree.withReadTxn(txn, 300, [&]{
                 response = ne2.reconcile(msg);
             });
 
