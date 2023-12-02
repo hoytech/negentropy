@@ -13,7 +13,7 @@ First, you need to create a storage instance. Currently only `Vector` is impleme
 Next, add all the items in your collection, and `seal()`:
 
     for (let item of myItems) {
-        storage.addItem(timestamp, id);
+        storage.insert(timestamp, id);
     }
 
     ne.seal();

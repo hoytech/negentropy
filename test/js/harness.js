@@ -20,7 +20,7 @@ rl.on('line', async (line) => {
         if (items.length !== 3) throw Error("too few items");
         let created = parseInt(items[1]);
         let id = items[2].trim();
-        storage.addItem(created, id);
+        storage.insert(created, id);
     } else if (items[0] == "seal") {
         storage.seal();
         ne = new Negentropy(storage, frameSizeLimit);

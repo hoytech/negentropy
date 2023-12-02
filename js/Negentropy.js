@@ -163,7 +163,7 @@ class NegentropyStorageVector {
         this.sealed = false;
     }
 
-    addItem(timestamp, id) {
+    insert(timestamp, id) {
         if (this.sealed) throw Error("already sealed");
         id = loadInputBuffer(id);
         if (id.byteLength !== ID_SIZE) throw Error("bad id size for added item");
@@ -179,6 +179,10 @@ class NegentropyStorageVector {
         for (let i = 1; i < this.items.length; i++) {
             if (itemCompare(this.items[i - 1], this.items[i]) === 0) throw Error("duplicate item inserted");
         }
+    }
+
+    unseal() {
+        this.sealed = false;
     }
 
     size() {
