@@ -104,6 +104,7 @@ struct BTreeLMDB : btree::BTreeCore {
 
     void deleteNode(uint64_t nodeId) {
         if (nodeId == 0) throw err("can't delete metadata");
+        dirtyNodeCache.erase(nodeId);
         dbi.del(txn, getKey(nodeId));
     }
 

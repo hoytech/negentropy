@@ -76,7 +76,7 @@ int main() {
         auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
         negentropy::storage::BTreeLMDB btree(txn, btreeDbi, 300);
         //negentropy::storage::btree::dump(btree);
-        negentropy::storage::btree::verify(btree);
+        negentropy::storage::btree::verify(btree, true);
     }
 
 

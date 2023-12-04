@@ -18,7 +18,11 @@
 
 
 struct Verifier {
+    bool isLMDB;
+
     std::set<uint64_t> addedTimestamps;
+
+    Verifier(bool isLMDB) : isLMDB(isLMDB) {}
 
     void insert(negentropy::storage::btree::BTreeCore &btree, uint64_t timestamp){
         negentropy::Item item(timestamp, std::string(32, (unsigned char)(timestamp % 256)));
@@ -36,7 +40,7 @@ struct Verifier {
 
     void doVerify(negentropy::storage::btree::BTreeCore &btree) {
         try {
-            negentropy::storage::btree::verify(btree, true);
+            negentropy::storage::btree::verify(btree, isLMDB);
         } catch (...) {
             std::cout << "TREE FAILED INVARIANTS:" << std::endl;
             negentropy::storage::btree::dump(btree);
@@ -58,17 +62,11 @@ struct Verifier {
 
 
 
-int main() {
-    std::cout << "SIZEOF NODE: " << sizeof(negentropy::storage::Node) << std::endl;
+void doFuzz(negentropy::storage::btree::BTreeCore &btree, Verifier &v) {
+    if (btree.size() != 0) throw negentropy::err("expected empty tree");
 
 
-    srand(0);
-
-    Verifier v;
-    negentropy::storage::BTreeMem btree;
-
-
-    // Return values
+    // Verify return values
 
     if (!btree.insert(100, std::string(32, '\x01'))) throw negentropy::err("didn't insert element?");
     if (btree.insert(100, std::string(32, '\x01'))) throw negentropy::err("double inserted element?");
@@ -109,61 +107,44 @@ int main() {
         std::cout << "DEL " << timestamp << " size = " << btree.size() << std::endl;
         v.erase(btree, *it);
     }
+}
 
 
-/*
-    auto env = lmdb::env::create();
-    env.set_max_dbs(64);
-    env.open("testdb/", 0);
+
+int main() {
+    std::cout << "SIZEOF NODE: " << sizeof(negentropy::storage::Node) << std::endl;
 
 
-    negentropy::storage::BTreeLMDB btree;
+    srand(0);
 
-    {
+
+    if (::getenv("NE_FUZZ_LMDB")) {
+        system("mkdir -p testdb/");
+        system("rm -f testdb/*");
+
+        auto env = lmdb::env::create();
+        env.set_max_dbs(64);
+        env.set_mapsize(1'000'000'000ULL);
+        env.open("testdb/", 0);
+
         auto txn = lmdb::txn::begin(env);
-        btree.setup(txn, "negentropy");
+        auto btreeDbi = negentropy::storage::BTreeLMDB::setupDB(txn, "test-data");
+
+        negentropy::storage::BTreeLMDB btree(txn, btreeDbi, 0);
+
+        Verifier v(true);
+        doFuzz(btree, v);
+
+        btree.flush();
         txn.commit();
+    } else {
+        Verifier v(false);
+        negentropy::storage::BTreeMem btree;
+        doFuzz(btree, v);
     }
 
 
-    {
-        auto txn = lmdb::txn::begin(env);
-
-        btree.withWriteTxn(txn, [&]{
-            auto add = [&](uint64_t timestamp){
-                negentropy::Item item(timestamp, std::string(32, '\x01'));
-                btree.insert(item);
-                negentropy::storage::btree::verify(btree);
-            };
-
-            for (size_t i = 100; i < 114; i++) add(i * 10);
-
-            add(99);
-            add(1081);
-            add(1082);
-            add(1083);
-            add(1084);
-            add(1085);
-            add(89);
-            add(88);
-            add(87);
-
-
-            negentropy::storage::btree::dump(btree);
-        });
-
-        txn.commit();
-    }
-
-    {
-        auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
-
-        btree.withReadTxn(txn, [&]{
-            negentropy::storage::btree::dump(btree);
-        });
-    }
-    */
-
+    std::cout << "Ok." << std::endl;
 
     return 0;
 }

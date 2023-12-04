@@ -81,7 +81,7 @@ To add/remove items, create a `BTreeLMDB` object inside a write transaction. Thi
     }
 
 * The third parameter (`300` in the above example) is the `treeId`. This allows many different trees to co-exist in the same DBI.
-* Storage must be flushed before commiting the transaction. `BTreeLMDB` will try to flush in its destructor. If you commit before this happens, you may see "MDB invalid argument" errors.
+* Storage must be flushed before commiting the transaction. `BTreeLMDB` will try to flush in its destructor. If you commit before this happens, you may see "mdb_put: Invalid argument" errors.
 
 
 ## Reconciliation

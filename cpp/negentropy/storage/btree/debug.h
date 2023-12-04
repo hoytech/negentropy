@@ -102,7 +102,7 @@ inline void verify(BTreeCore &btree, uint64_t nodeId, uint64_t depth, VerifyCont
     if (accumCountOut) *accumCountOut += accumCount;
 }
 
-inline void verify(BTreeCore &btree, bool checkMemLeaks = false) {
+inline void verify(BTreeCore &btree, bool isLMDB) {
     VerifyContext ctx;
     Accumulator accum;
     accum.setToZero();
@@ -136,12 +136,45 @@ inline void verify(BTreeCore &btree, bool checkMemLeaks = false) {
         if (totalItems != accumCount) throw err("verify: leaf count mismatch");
     }
 
-    if (checkMemLeaks) {
+    // Check for leaks
+
+    if (isLMDB) {
+        static_assert(std::endian::native == std::endian::little); // FIXME
+
+        auto &btreeLMDB = dynamic_cast<BTreeLMDB&>(btree);
+        btreeLMDB.flush();
+
+        std::string_view key, val;
+
+        // Leaks
+
+        auto cursor = lmdb::cursor::open(btreeLMDB.txn, btreeLMDB.dbi);
+
+        if (cursor.get(key, val, MDB_FIRST)) {
+            do {
+                uint64_t nodeId = lmdb::from_sv<uint64_t>(key.substr(8));
+                if (nodeId != 0 && !ctx.allNodeIds.contains(nodeId)) throw err("verify: memory leak");
+            } while (cursor.get(key, val, MDB_NEXT));
+        }
+
+        // Dangling
+
+        for (const auto &k : ctx.allNodeIds) {
+            std::string tpKey;
+            tpKey += lmdb::to_sv(btreeLMDB.treeId);
+            tpKey += lmdb::to_sv(k);
+            if (!btreeLMDB.dbi.get(btreeLMDB.txn, tpKey, val)) throw err("verify: dangling node");
+        }
+    } else {
         auto &btreeMem = dynamic_cast<BTreeMem&>(btree);
+
+        // Leaks
 
         for (const auto &[k, v] : btreeMem._nodeStorageMap) {
             if (!ctx.allNodeIds.contains(k)) throw err("verify: memory leak");
         }
+
+        // Dangling
 
         for (const auto &k : ctx.allNodeIds) {
             if (!btreeMem._nodeStorageMap.contains(k)) throw err("verify: dangling node");
