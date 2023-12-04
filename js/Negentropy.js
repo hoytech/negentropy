@@ -280,6 +280,10 @@ class Negentropy {
         return this._renderOutput(output);
     }
 
+    setInitiator() {
+        this.isInitiator = true;
+    }
+
     async reconcile(query) {
         let haveIds = [], needIds = [];
         query = new WrappedBuffer(loadInputBuffer(query));
