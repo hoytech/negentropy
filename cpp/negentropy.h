@@ -55,6 +55,10 @@ struct Negentropy {
         return output;
     }
 
+    void setInitiator() {
+        isInitiator = true;
+    }
+
     std::string reconcile(std::string_view query) {
         if (isInitiator) throw negentropy::err("initiator not asking for have/need IDs");
 
