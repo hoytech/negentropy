@@ -19,40 +19,44 @@
 
 
 int main() {
+    system("mkdir -p testdb/");
+    system("rm -f testdb/*");
+
     auto env = lmdb::env::create();
     env.set_max_dbs(64);
     env.set_mapsize(1'000'000'000ULL);
     env.open("testdb/", 0);
 
 
-    negentropy::storage::BTreeLMDB btree;
+    lmdb::dbi btreeDbi;
 
     {
         auto txn = lmdb::txn::begin(env);
-        btree.setup(txn, "negentropy");
+        btreeDbi = negentropy::storage::BTreeLMDB::setupDB(txn, "test-data");
         txn.commit();
     }
 
 
     {
         auto txn = lmdb::txn::begin(env);
+        negentropy::storage::BTreeLMDB btree(txn, btreeDbi, 300);
 
-        btree.withWriteTxn(txn, 0, [&]{
-            auto add = [&](uint64_t timestamp){
-                negentropy::Item item(timestamp, std::string(32, '\x01'));
-                btree.insertItem(item);
-            };
+        auto add = [&](uint64_t timestamp){
+            negentropy::Item item(timestamp, std::string(32, '\x01'));
+            btree.insertItem(item);
+        };
 
-            for (size_t i = 1; i < 100'000; i++) add(i);
-        });
+        for (size_t i = 1; i < 100'000; i++) add(i);
 
+        btree.flush();
         txn.commit();
     }
 
     {
         auto txn = lmdb::txn::begin(env, 0, MDB_RDONLY);
+        negentropy::storage::BTreeLMDB btree(txn, btreeDbi, 300);
 
-        auto cursor = lmdb::cursor::open(txn, btree.dbi);
+        auto cursor = lmdb::cursor::open(txn, btreeDbi);
 
         std::string_view key, val;
         size_t minStart = negentropy::MAX_U64;

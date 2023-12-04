@@ -52,7 +52,7 @@ Uses the same implementation as BTreeMem, except that it uses [LMDB](http://lmdb
 
     #include "negentropy/storage/BTreeLMDB.h"
 
-First create an LMDB environment and open the DB. Next, call `setup` on the `storage` instance inside of a write transaction. The `"test-data"` argument is the LMDB DBI table name you want to use.
+First create an LMDB environment. Next, allocate a DBI to contain your tree(s) by calling `setupDB` inside a write transaction (don't forget to commit it). The `"test-data"` argument is the LMDB DBI table name you want to use:
 
     negentropy::storage::BTreeLMDB storage;
 
@@ -60,24 +60,28 @@ First create an LMDB environment and open the DB. Next, call `setup` on the `sto
     env.set_max_dbs(64);
     env.open("testdb/", 0);
 
+    lmdb::dbi btreeDbi;
+
     {
         auto txn = lmdb::txn::begin(env);
-        storage.setup(txn, "test-data");
+        btreeDbi = negentropy::storage::BTreeLMDB::setupDB(txn, "test-data");
         txn.commit();
     }
 
-Adding or remove items should be done with write transactions also. Use the `withWriteTxn` method to wrap the operations:
+To add/remove items, create a `BTreeLMDB` object inside a write transaction. This is the storage instance:
 
     {
         auto txn = lmdb::txn::begin(env);
+        negentropy::storage::BTreeLMDB storage(txn, btreeDbi, 300);
 
-        storage.withWriteTxn(txn, 300, [&]{
-            storage.insert(timestamp, id);
-        });
+        storage.insert(timestamp, id);
+
+        storage.flush();
+        txn.commit();
     }
 
-* Operations inside `withWriteTxn` are performed in a child transaction, so any exceptions will rollback all changes performed within the `withWriteTxn` block.
-* The second parameter (`300` in the above example) is the `treeId`. This allows many different trees to co-exist in the same DB.
+* The third parameter (`300` in the above example) is the `treeId`. This allows many different trees to co-exist in the same DBI.
+* Storage must be flushed before commiting the transaction. `BTreeLMDB` will try to flush in its destructor. If you commit before this happens, you may see "MDB invalid argument" errors.
 
 
 ## Reconciliation
@@ -115,14 +119,6 @@ The server-side is similar, except it doesn't create an initial message, there a
         respondToClient(response);
     }
 
-Reconciliation with `BTreeLMDB` requires that calls to `initiate` and/or `reconcile` are wrapped with a `withReadTxn` (or `withWriteTxn`) like so:
-
-    std::string response;
-
-    storage.withReadTxn(txn, 300, [&]{
-        response = ne.reconcile(msg);
-    });
-
 
 
 ## BTree Implementation
@@ -133,4 +129,4 @@ Each node has an accumulator that contains the sum of the IDs of all nodes below
 
 Nodes will split and rebalance themselves as necessary to keep the tree balanced. This is a major advantage over rigid data-structures like merkle-search trees and prolly trees, which are only probabilisticly balanced.
 
-If records are always inserted to the "right" of the tree, nodes will be fully packed. Otherwise, the tree attempts to keep them 50% full.
+If records are always inserted to the "right" of the tree, nodes will be fully packed. Otherwise, the tree attempts to keep them 50% full. There are more details on the tree invariants in the `negentropy/storage/btree/core.h` implementation file.
