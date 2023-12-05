@@ -1,11 +1,13 @@
 #pragma once
 
+#include <iostream>
 #include <set>
 
 #include <hoytech/hex.h>
 
 #include "negentropy/storage/btree/core.h"
 #include "negentropy/storage/BTreeMem.h"
+#include "negentropy/storage/BTreeLMDB.h"
 
 
 namespace negentropy { namespace storage { namespace btree {
