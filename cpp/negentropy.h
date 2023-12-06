@@ -227,7 +227,21 @@ struct Negentropy {
                 auto ourFingerprint = storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                auto nextBound = curr == upper ? upperBound : getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr));
+                Bound nextBound;
+
+                if (curr == upper) {
+                    nextBound = upperBound;
+                } else {
+                    Item prevItem, currItem;
+
+                    storage.iterate(curr - 1, curr + 1, [&](const Item &item, size_t index){
+                        if (index == curr - 1) prevItem = item;
+                        else currItem = item;
+                        return true;
+                    });
+
+                    nextBound = getMinimalBound(prevItem, currItem);
+                }
 
                 o += encodeBound(nextBound);
                 o += encodeVarInt(uint64_t(Mode::Fingerprint));
