@@ -36,20 +36,20 @@ void testSubRange() {
     if (vecBig.getItem(400 + 10) != subRange.getItem(10)) throw hoytech::error("getItem mismatch");
 
     {
-        auto lb = subRange.findLowerBound(0, negentropy::Bound(550));
-        auto lb2 = vecSmall.findLowerBound(0, negentropy::Bound(550));
+        auto lb = subRange.findLowerBound(0, subRange.size(), negentropy::Bound(550));
+        auto lb2 = vecSmall.findLowerBound(0, vecSmall.size(), negentropy::Bound(550));
         if (lb != lb2) throw hoytech::error("findLowerBound mismatch");
     }
 
     {
-        auto lb = subRange.findLowerBound(0, negentropy::Bound(20));
-        auto lb2 = vecSmall.findLowerBound(0, negentropy::Bound(20));
+        auto lb = subRange.findLowerBound(0, subRange.size(), negentropy::Bound(20));
+        auto lb2 = vecSmall.findLowerBound(0, vecSmall.size(), negentropy::Bound(20));
         if (lb != lb2) throw hoytech::error("findLowerBound mismatch");
     }
 
     {
-        auto lb = subRange.findLowerBound(0, negentropy::Bound(5000));
-        auto lb2 = vecSmall.findLowerBound(0, negentropy::Bound(5000));
+        auto lb = subRange.findLowerBound(0, subRange.size(), negentropy::Bound(5000));
+        auto lb2 = vecSmall.findLowerBound(0, vecSmall.size(), negentropy::Bound(5000));
         if (lb != lb2) throw hoytech::error("findLowerBound mismatch");
     }
 }

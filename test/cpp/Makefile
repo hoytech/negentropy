@@ -27,4 +27,4 @@ subRange: subRange.cpp
 all: harness btreeFuzz lmdbTest measureSpaceUsage subRange
 
 clean:
-	rm -f harness btreeFuzz lmdbTest measureSpaceUsage subRange
+	rm -f harness btreeFuzz lmdbTest measureSpaceUsage

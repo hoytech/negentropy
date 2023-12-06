@@ -55,11 +55,11 @@ struct Vector : StorageBase {
         }
     }
 
-    size_t findLowerBound(size_t begin, const Bound &bound) {
+    size_t findLowerBound(size_t begin, size_t end, const Bound &bound) {
         checkSealed();
-        checkBounds(begin, items.size());
+        checkBounds(begin, end);
 
-        return std::lower_bound(items.begin() + begin, items.end(), bound.item) - items.begin();
+        return std::lower_bound(items.begin() + begin, items.begin() + end, bound.item) - items.begin();
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {

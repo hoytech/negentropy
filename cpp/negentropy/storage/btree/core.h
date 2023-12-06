@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include "negentropy.h"
 
 
@@ -588,14 +590,14 @@ struct BTreeCore : StorageBase {
         });
     }
 
-    size_t findLowerBound(size_t begin, const Bound &value) {
-        if (begin >= size()) throw err("out of range");
+    size_t findLowerBound(size_t begin, size_t end, const Bound &value) {
+        checkBounds(begin, end);
 
         auto rootNodePtr = getNodeRead(getRootNodeId());
-        if (!rootNodePtr.exists()) return 0;
+        if (!rootNodePtr.exists()) return end;
         auto &rootNode = rootNodePtr.get();
         if (value.item <= rootNode.items[0].item) return begin;
-        return findLowerBoundAux(value, rootNodePtr, 0);
+        return std::min(findLowerBoundAux(value, rootNodePtr, 0), end);
     }
 
     size_t findLowerBoundAux(const Bound &value, NodePtr nodePtr, uint64_t numToLeft) {

@@ -108,7 +108,7 @@ struct Negentropy {
             auto mode = Mode(decodeVarInt(query));
 
             auto lower = prevIndex;
-            auto upper = storage.findLowerBound(prevIndex, currBound);
+            auto upper = storage.findLowerBound(prevIndex, storageSize, currBound);
 
             if (mode == Mode::Skip) {
                 skip = true;
