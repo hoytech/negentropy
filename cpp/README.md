@@ -84,6 +84,15 @@ To add/remove items, create a `BTreeLMDB` object inside a write transaction. Thi
 * Storage must be flushed before commiting the transaction. `BTreeLMDB` will try to flush in its destructor. If you commit before this happens, you may see "mdb_put: Invalid argument" errors.
 
 
+### negentropy::storage::SubRange
+
+This storage is a proxy to a sub-range of another storage. It is useful for performing partial syncs of the DB.
+
+The constructor arguments are the large storage you want to proxy to (of type `Vector`, `BTreeLMDB`, etc), and the lower and upper bounds of the desired sub-range. As usual, lower bounds are inclusive and upper bounds are exclusive:
+
+    negentropy::storage::SubRange subStorage(storage, negentropy::Bound(fromTimestamp), negentropy::Bound(toTimestamp));
+
+
 ## Reconciliation
 
 Reconciliation works mostly the same for all storage types. First create a `Negentropy` object:

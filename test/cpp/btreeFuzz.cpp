@@ -12,7 +12,6 @@
 #include "negentropy/storage/BTreeLMDB.h"
 #include "negentropy/storage/BTreeMem.h"
 #include "negentropy/storage/btree/debug.h"
-#include "negentropy/storage/Vector.h"
 
 
 
@@ -144,7 +143,7 @@ int main() {
     }
 
 
-    std::cout << "Ok." << std::endl;
+    std::cout << "OK" << std::endl;
 
     return 0;
 }

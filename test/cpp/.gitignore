@@ -2,5 +2,6 @@
 /btreeFuzz
 /measureSpaceUsage
 /lmdbTest
+/subRange
 
 /testdb/

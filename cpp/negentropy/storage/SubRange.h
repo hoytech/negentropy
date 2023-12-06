@@ -15,9 +15,9 @@ struct SubRange : StorageBase {
 
     SubRange(StorageBase &base, const Bound &lowerBound, const Bound &upperBound) : base(base) {
         baseSize = base.size();
-        subBegin = findLowerBound(0, baseSize, lowerBound);
-        subEnd = findLowerBound(subBegin, baseSize, upperBound);
-        if (subEnd != baseSize && Bound(getItem(subEnd)) == upperBound) subEnd++; // instead of upper_bound: OK because items are unique
+        subBegin = base.findLowerBound(0, baseSize, lowerBound);
+        subEnd = base.findLowerBound(subBegin, baseSize, upperBound);
+        if (subEnd != baseSize && Bound(base.getItem(subEnd)) == upperBound) subEnd++; // instead of upper_bound: OK because items are unique
     }
 
     uint64_t size() {
@@ -38,7 +38,8 @@ struct SubRange : StorageBase {
     size_t findLowerBound(size_t begin, size_t end, const Bound &bound) {
         checkBounds(begin, end);
 
-        return base.findLowerBound(subBegin + begin, subBegin + end, bound);
+        auto ret = base.findLowerBound(subBegin + begin, subBegin + end, bound);
+        return ret - subBegin;
     }
 
     Fingerprint fingerprint(size_t begin, size_t end) {

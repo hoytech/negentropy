@@ -18,10 +18,13 @@ lmdbTest: lmdbTest.cpp
 measureSpaceUsage: measureSpaceUsage.cpp
 	$(CXX) -DNE_FUZZ_TEST $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -llmdb -o $@
 
+subRange: subRange.cpp
+	$(CXX) -DNE_FUZZ_TEST $(W) $(OPT) $(STD) $(INCS) $< -lcrypto -o $@
+
 
 .PHONY: all clean
 
-all: harness btreeFuzz lmdbTest measureSpaceUsage
+all: harness btreeFuzz lmdbTest measureSpaceUsage subRange
 
 clean:
 	rm -f harness btreeFuzz lmdbTest measureSpaceUsage
