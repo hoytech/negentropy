@@ -437,7 +437,21 @@ class Negentropy {
                 let ourFingerprint = await this.storage.fingerprint(curr, curr + bucketSize);
                 curr += bucketSize;
 
-                let nextBound = curr === upper ? upperBound : this.getMinimalBound(this.storage.getItem(curr - 1), this.storage.getItem(curr));
+                let nextBound;
+
+                if (curr === upper) {
+                    nextBound = upperBound;
+                } else {
+                    let prevItem, currItem;
+
+                    this.storage.iterate(curr - 1, curr + 1, (item, index) => {
+                        if (index === curr - 1) prevItem = item;
+                        else currItem = item;
+                        return true;
+                    });
+
+                    nextBound = this.getMinimalBound(prevItem, currItem);
+                }
 
                 o.extend(this.encodeBound(nextBound));
                 o.extend(encodeVarInt(Mode.Fingerprint));
