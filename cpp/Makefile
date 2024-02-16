@@ -19,7 +19,7 @@ negentropy-cpp:
 	g++ negentropy.h --std=c++20 -o negentropy.o $(INCS)
 
 c-wrapper:
-	g++ negentropy_wrapper.h --std=c++20 -o negentropy_wrapper.o $(INCS) -I../test/cpp/lmdbxx/include/
+	g++ negentropy_wrapper.h --std=c++20 -o negentropy_wrapper.o $(INCS) -I./vendor/lmdbxx/include/
 
-clean: 
+clean:
 	rm -f negentropy.o
