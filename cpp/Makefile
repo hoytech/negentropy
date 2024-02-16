@@ -13,7 +13,7 @@ install-deps:
 	brew install lmdb openssl
 
 shared-lib: negentropy.o
-	g++ -o $(TARGET) negentropy.o -shared
+	g++ -shared -fPIC -o $(TARGET) negentropy.o negentropy_wrapper.o 
 
 negentropy-cpp:
 	g++ negentropy.h --std=c++20 -o negentropy.o $(INCS)
@@ -22,4 +22,4 @@ c-wrapper:
 	g++ negentropy_wrapper.h --std=c++20 -o negentropy_wrapper.o $(INCS) -I./vendor/lmdbxx/include/
 
 clean:
-	rm -f negentropy.o
+	rm -f negentropy.o  negentropy_wrapper.o libnegentropy.so
