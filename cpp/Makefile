@@ -6,20 +6,18 @@ TARGET  = libnegentropy.so
 
 .PHONY: all clean install-deps
 
-all: negentropy-cpp c-wrapper shared-lib 
+all: precompiled-header shared-lib
 
 #TODO: Need to add compilation flags based on OS
 install-deps:
 	brew install lmdb openssl
 
-shared-lib: negentropy.o
-	g++ -shared -fPIC -o $(TARGET) negentropy.o negentropy_wrapper.o 
+# Generate 'negentropy.h.gch'
+precompiled-header:
+	g++ --std=c++20 -Wall -fexceptions -g negentropy.h -I./ -I./vendor/lmdbxx/include/
 
-negentropy-cpp:
-	g++ negentropy.h --std=c++20 -o negentropy.o $(INCS)
-
-c-wrapper:
-	g++ negentropy_wrapper.h --std=c++20 -o negentropy_wrapper.o $(INCS) -I./vendor/lmdbxx/include/
+shared-lib: negentropy.h.gch
+	g++ --std=c++20 -I./ -I./vendor/lmdbxx/include/ -shared -fPIC -o $(TARGET) negentropy_wrapper.c
 
 clean:
-	rm -f negentropy.o  negentropy_wrapper.o libnegentropy.so
+	rm -f $(TARGET) negentropy.h.gch libnegentropy.so
