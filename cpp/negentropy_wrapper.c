@@ -1,4 +1,5 @@
-
+#include "negentropy.h"
+#include "negentropy/storage/BTreeMem.h"
 #include "negentropy_wrapper.h"
 
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.

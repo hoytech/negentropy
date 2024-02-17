@@ -2,10 +2,6 @@
 #ifndef _NEGENTROPY_WRAPPER_H
 #define _NEGENTROPY_WRAPPER_H
 
-#include "negentropy.h"
-#include "negentropy/storage/BTreeMem.h"
-
-#define length(array) ((sizeof(array)) / (sizeof(array[0])))
 
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
