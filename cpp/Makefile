@@ -1,7 +1,7 @@
 # Build a shared library of negentropy
 
 #TODO: Need to add compilation flags based on OS
-INCS	= -I./ -I/opt/homebrew/include/ 
+INCS	= -I./ -I/opt/homebrew/include/ -I./vendor/lmdbxx/include/
 TARGET  = libnegentropy.so
 
 .PHONY: all clean install-deps
@@ -14,10 +14,10 @@ install-deps:
 
 # Generate 'negentropy.h.gch'
 precompiled-header:
-	g++ --std=c++20 -Wall -fexceptions -g negentropy.h -I./ -I./vendor/lmdbxx/include/
+	g++ --std=c++20 -Wall -fexceptions -g negentropy.h $(INCS)
 
 shared-lib: negentropy.h.gch
-	g++ --std=c++20 -I./ -I./vendor/lmdbxx/include/ -shared -fPIC -o $(TARGET) negentropy_wrapper.c
+	g++ --std=c++20 $(INCS) -shared -fPIC -o $(TARGET) negentropy_wrapper.c
 
 clean:
 	rm -f $(TARGET) negentropy.h.gch libnegentropy.so
