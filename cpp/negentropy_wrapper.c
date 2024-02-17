@@ -5,7 +5,7 @@
 //TODO: Do error handling by catching exceptions
 
 void* storage_new(const char* db_path, const char* name){
-    negentropy::storage::BTreeLMDB* storage;
+    negentropy::storage::BTreeMem* storage;
 /* 
     auto env = lmdb::env::create();
     env.set_max_dbs(64);
@@ -15,23 +15,23 @@ void* storage_new(const char* db_path, const char* name){
 
     {
         auto txn = lmdb::txn::begin(env);
-        btreeDbi = negentropy::storage::BTreeLMDB::setupDB(txn, name);
+        btreeDbi = negentropy::storage::BTreeMem::setupDB(txn, name);
         txn.commit();
     } */
     //TODO: Finish constructor 
-    //storage = new negentropy::storage::BTreeLMDB();
+    storage = new negentropy::storage::BTreeMem();
     return storage;
 }
 
 void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     //TODO: Make these typecasts into macros??
-    negentropy::storage::BTreeLMDB* lmdbStorage;
+    negentropy::storage::BTreeMem* lmdbStorage;
     //TODO: reinterpret cast is risky, need to use more safe type conversion.
-    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeLMDB*>(storage);
+    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
 
-    Negentropy<negentropy::storage::BTreeLMDB>* ne;
+    Negentropy<negentropy::storage::BTreeMem>* ne;
     try{
-    ne = new Negentropy<negentropy::storage::BTreeLMDB>(*lmdbStorage, frameSizeLimit);
+    ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
     }catch(negentropy::err e){
         //TODO:Find a way to return this error
         return NULL;
@@ -40,8 +40,8 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
 }
 
 const char* negentropy_initiate(void* negentropy){
-    Negentropy<negentropy::storage::BTreeLMDB>* ngn_inst;
-    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeLMDB>*>(negentropy);
+    Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::string* output = new std::string();
     try {
@@ -54,8 +54,8 @@ const char* negentropy_initiate(void* negentropy){
 }
 
 void negentropy_setinitiator(void* negentropy){
-    Negentropy<negentropy::storage::BTreeLMDB> *ngn_inst;
-    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeLMDB>*>(negentropy);
+    Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     ngn_inst->setInitiator();
 
@@ -63,8 +63,8 @@ void negentropy_setinitiator(void* negentropy){
 
 
 bool storage_insert(void* storage, uint64_t createdAt, const char* id){
-    negentropy::storage::BTreeLMDB* lmdbStorage;
-    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeLMDB*>(storage);
+    negentropy::storage::BTreeMem* lmdbStorage;
+    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     
     //TODO: Error handling. Is it required?
     //How does out of memory get handled?
@@ -73,8 +73,8 @@ bool storage_insert(void* storage, uint64_t createdAt, const char* id){
 
 
 bool storage_erase(void* storage, uint64_t createdAt, const char* id){
-    negentropy::storage::BTreeLMDB* lmdbStorage;
-    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeLMDB*>(storage);
+    negentropy::storage::BTreeMem* lmdbStorage;
+    lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     
     //TODO: Error handling
     return lmdbStorage->erase(createdAt, id);
@@ -82,8 +82,8 @@ bool storage_erase(void* storage, uint64_t createdAt, const char* id){
 
 
 const char* reconcile(void* negentropy, const char* query){
-    Negentropy<negentropy::storage::BTreeLMDB> *ngn_inst;
-    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeLMDB>*>(negentropy);
+    Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::string* output = new std::string();
     try {
@@ -97,8 +97,8 @@ const char* reconcile(void* negentropy, const char* query){
 
 const char* reconcile_with_ids(void* negentropy, const char* query, const char* have_ids[], 
                                         uint64_t have_ids_len, const char* need_ids[], uint64_t need_ids_len){
-    Negentropy<negentropy::storage::BTreeLMDB> *ngn_inst;
-    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeLMDB>*>(negentropy);
+    Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::optional<std::string>* output;
     std::vector<std::string> haveIds(have_ids, have_ids+have_ids_len);
