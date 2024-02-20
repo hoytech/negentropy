@@ -84,13 +84,13 @@ bool storage_erase(void* storage, uint64_t createdAt, const char* id){
 }
 
 
-const char* reconcile(void* negentropy, const char* query){
+const char* reconcile(void* negentropy, const char* query, uint64_t query_len){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::string* output = new std::string();
     try {
-        *output = ngn_inst->reconcile(std::string_view(query));
+        *output = ngn_inst->reconcile(std::string_view(query, query_len));
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
         return NULL;
@@ -98,18 +98,32 @@ const char* reconcile(void* negentropy, const char* query){
     return output->c_str();
 }
 
-const char* reconcile_with_ids(void* negentropy, const char* query, const char* have_ids[], 
-                                        uint64_t have_ids_len, const char* need_ids[], uint64_t need_ids_len){
+char *convert(const std::string & s)
+{
+   char *pc = new char[s.size()+1];
+   std::strcpy(pc, s.c_str());
+   return pc;
+}
+
+const char* reconcile_with_ids(void* negentropy, const char* query, uint64_t query_len, char* have_ids[], 
+                                        uint64_t *have_ids_len, char* need_ids[], uint64_t *need_ids_len){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::optional<std::string>* output;
-    std::vector<std::string> haveIds(have_ids, have_ids+have_ids_len);
-
-    std::vector<std::string> needIds(need_ids, need_ids+need_ids_len);
+    std::vector<std::string> haveIds;
+    std::vector<std::string> needIds;
 
     try {
-        *output = ngn_inst->reconcile(std::string_view(query), haveIds, needIds);
+        *output = ngn_inst->reconcile(std::string_view(query, query_len), haveIds, needIds);
+
+        *have_ids_len = haveIds.size();
+        *need_ids_len = needIds.size();
+        //TODO: Optimize to not copy and rather return memory reference.
+
+        std::transform(haveIds.begin(), haveIds.end(), have_ids, convert);
+        std::transform(needIds.begin(), needIds.end(), need_ids, convert);
+
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
         return NULL;

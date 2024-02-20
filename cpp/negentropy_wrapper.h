@@ -23,10 +23,10 @@ EXTERNC bool storage_insert(void* storage, uint64_t createdAt, const char* id);
 
 EXTERNC bool storage_erase(void* storage, uint64_t createdAt, const char* id);
 
-EXTERNC const char* reconcile(void* negentropy, const char* query);
+EXTERNC const char* reconcile(void* negentropy, const char* query, uint64_t query_len);
 
-EXTERNC const char* reconcile_with_ids(void* negentropy, const char* query, const char* have_ids[], 
-                                        uint64_t have_ids_len, const char* need_ids[], uint64_t need_ids_len);
+EXTERNC const char* reconcile_with_ids(void* negentropy, const char* query, uint64_t query_len, const char* have_ids[], 
+                                        uint64_t *have_ids_len, const char* need_ids[], uint64_t *need_ids_len);
 
 #endif
 
