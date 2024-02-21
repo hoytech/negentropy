@@ -8,6 +8,11 @@
 #define EXTERNC
 #endif
 
+typedef struct _buffer_{
+    uint64_t len ;
+    char* data;
+}buffer;
+
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
 
@@ -19,13 +24,13 @@ EXTERNC const char* negentropy_initiate(void* negentropy);
 
 EXTERNC void negentropy_setinitiator(void* negentropy);
 
-EXTERNC bool storage_insert(void* storage, uint64_t createdAt, const char* id);
+EXTERNC bool storage_insert(void* storage, uint64_t createdAt, buffer* id);
 
-EXTERNC bool storage_erase(void* storage, uint64_t createdAt, const char* id);
+EXTERNC bool storage_erase(void* storage, uint64_t createdAt, buffer* id);
 
-EXTERNC const char* reconcile(void* negentropy, const char* query, uint64_t query_len);
+EXTERNC const char* reconcile(void* negentropy, buffer* query);
 
-EXTERNC const char* reconcile_with_ids(void* negentropy, const char* query, uint64_t query_len, const char* have_ids[], 
+EXTERNC const char* reconcile_with_ids(void* negentropy, buffer*  query, const char* have_ids[], 
                                         uint64_t *have_ids_len, const char* need_ids[], uint64_t *need_ids_len);
 
 #endif

@@ -4,7 +4,7 @@
 INCS	= -I./ -I/opt/homebrew/include/ -I./vendor/lmdbxx/include/
 TARGET  = libnegentropy.so
 
-.PHONY: all clean install-deps
+.PHONY: all clean install-deps precompiled-header shared-lib
 
 all: precompiled-header shared-lib
 
@@ -16,7 +16,7 @@ install-deps:
 precompiled-header:
 	g++ --std=c++20 -Wall -fexceptions -g negentropy.h $(INCS)
 
-shared-lib: negentropy.h.gch
+shared-lib:
 	g++ --std=c++20 $(INCS) -shared -fPIC -o $(TARGET) negentropy_wrapper.c -lcrypto -lssl -L/opt/homebrew/lib/
 
 clean:

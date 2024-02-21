@@ -1,3 +1,5 @@
+#include <iostream>
+
 #include "negentropy.h"
 #include "negentropy/storage/BTreeMem.h"
 #include "negentropy_wrapper.h"
@@ -5,7 +7,7 @@
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
 
-
+using namespace std;
 
 void* storage_new(const char* db_path, const char* name){
     negentropy::storage::BTreeMem* storage;
@@ -65,32 +67,32 @@ void negentropy_setinitiator(void* negentropy){
 }
 
 
-bool storage_insert(void* storage, uint64_t createdAt, const char* id){
+bool storage_insert(void* storage, uint64_t createdAt, buffer* id){
     negentropy::storage::BTreeMem* lmdbStorage;
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
-    
+    std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:" << std::string_view(id->data, id->len) << "length is:"<< id->len << std::endl;
     //TODO: Error handling. Is it required?
     //How does out of memory get handled?
-    return lmdbStorage->insert(createdAt, id);
+    return lmdbStorage->insert(createdAt, std::string_view(id->data, id->len));
 }
 
 
-bool storage_erase(void* storage, uint64_t createdAt, const char* id){
+bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     negentropy::storage::BTreeMem* lmdbStorage;
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     
     //TODO: Error handling
-    return lmdbStorage->erase(createdAt, id);
+    return lmdbStorage->erase(createdAt, std::string_view(id->data, id->len));
 }
 
 
-const char* reconcile(void* negentropy, const char* query, uint64_t query_len){
+const char* reconcile(void* negentropy, buffer* query){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
     std::string* output = new std::string();
     try {
-        *output = ngn_inst->reconcile(std::string_view(query, query_len));
+        *output = ngn_inst->reconcile(std::string_view(query->data, query->len));
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
         return NULL;
@@ -105,7 +107,7 @@ char *convert(const std::string & s)
    return pc;
 }
 
-const char* reconcile_with_ids(void* negentropy, const char* query, uint64_t query_len, char* have_ids[], 
+const char* reconcile_with_ids(void* negentropy, buffer*  query, char* have_ids[], 
                                         uint64_t *have_ids_len, char* need_ids[], uint64_t *need_ids_len){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
@@ -115,7 +117,7 @@ const char* reconcile_with_ids(void* negentropy, const char* query, uint64_t que
     std::vector<std::string> needIds;
 
     try {
-        *output = ngn_inst->reconcile(std::string_view(query, query_len), haveIds, needIds);
+        *output = ngn_inst->reconcile(std::string_view(query->data, query->len), haveIds, needIds);
 
         *have_ids_len = haveIds.size();
         *need_ids_len = needIds.size();
