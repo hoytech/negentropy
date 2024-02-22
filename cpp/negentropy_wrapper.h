@@ -1,4 +1,3 @@
-
 #ifndef _NEGENTROPY_WRAPPER_H
 #define _NEGENTROPY_WRAPPER_H
 
@@ -20,7 +19,7 @@ EXTERNC void* storage_new(const char* db_path, const char* name);
 
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
-EXTERNC const char* negentropy_initiate(void* negentropy);
+EXTERNC void negentropy_initiate(void* negentropy, void *(const char* buf, size_t len));
 
 EXTERNC void negentropy_setinitiator(void* negentropy);
 
@@ -30,8 +29,8 @@ EXTERNC bool storage_erase(void* storage, uint64_t createdAt, buffer* id);
 
 EXTERNC const char* reconcile(void* negentropy, buffer* query);
 
-EXTERNC const char* reconcile_with_ids(void* negentropy, buffer*  query, const char* have_ids[], 
-                                        uint64_t *have_ids_len, const char* need_ids[], uint64_t *need_ids_len);
+EXTERNC const char* reconcile_with_ids(void* negentropy, buffer*  query, char* have_ids[], 
+                                        uint64_t *have_ids_len, char* need_ids[], uint64_t *need_ids_len);
 
 #endif
 

@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <optional>
 #include <bit>
+#include <iostream>
 
 #include "negentropy/encoding.h"
 #include "negentropy/types.h"
@@ -49,7 +50,7 @@ struct Negentropy {
 
         std::string output;
         output.push_back(PROTOCOL_VERSION);
-
+        std::cout << "storage size" << storage.size() << std::endl;
         output += splitRange(0, storage.size(), Bound(MAX_U64));
 
         return output;
