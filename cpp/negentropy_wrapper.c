@@ -42,23 +42,19 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     return ne;
 }
 
-void negentropy_initiate(void* negentropy, void (*callback)(const char* buf, size_t len)){
+const char* negentropy_initiate(void* negentropy){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
-    std::string output;
+    std::string* output = new std::string();
     try {
-        output = ngn_inst->initiate();
-        std::cout << "output of initiate is, len:" << output.size() << std::hex << output << std::endl;
+        *output = ngn_inst->initiate();
+        std::cout << "output of initiate is, len:" << output->size() << std::hex << *output << std::endl;
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
-        callback(NULL,0);
-        return ;
+        return NULL;
     }
-    callback(output.c_str(), output.size());
-    //TODO: Avoid copy and use a callback
-    //memcpy(buf, output, output.size())
-    return ;
+    return output->c_str();
 }
 
 void negentropy_setinitiator(void* negentropy){

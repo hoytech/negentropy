@@ -1,3 +1,4 @@
+
 #ifndef _NEGENTROPY_WRAPPER_H
 #define _NEGENTROPY_WRAPPER_H
 
@@ -19,7 +20,7 @@ EXTERNC void* storage_new(const char* db_path, const char* name);
 
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
-EXTERNC void negentropy_initiate(void* negentropy, void *(const char* buf, size_t len));
+EXTERNC const char* negentropy_initiate(void* negentropy);
 
 EXTERNC void negentropy_setinitiator(void* negentropy);
 
