@@ -42,7 +42,7 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     return ne;
 }
 
-const char* negentropy_initiate(void* negentropy){
+size_t negentropy_initiate(void* negentropy, buffer* out){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -52,9 +52,10 @@ const char* negentropy_initiate(void* negentropy){
         std::cout << "output of initiate is, len:" << output->size() << std::hex << *output << std::endl;
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
-        return NULL;
+        return 0;
     }
-    return output->c_str();
+    memcpy( out->data, output->c_str() ,output->size());
+    return output->size();
 }
 
 void negentropy_setinitiator(void* negentropy){
@@ -65,38 +66,52 @@ void negentropy_setinitiator(void* negentropy){
 
 }
 
+void printHexString(std::string_view toPrint){
+    for (size_t i = 0; i < toPrint.size(); ++i) {
+        printf("%0hhx", toPrint[i]);
+    }
+    printf("\n");
+}
 
 bool storage_insert(void* storage, uint64_t createdAt, buffer* id){
     negentropy::storage::BTreeMem* lmdbStorage;
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
-    std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:" << std::hex << id->data << " length is:"<< id->len << std::endl;
+    std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
+    
+    std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:"; 
+    printHexString(data);
+    
     //TODO: Error handling. Is it required?
     //How does out of memory get handled?
-    return lmdbStorage->insert(createdAt, std::string_view(id->data, id->len));
+    return lmdbStorage->insert(createdAt, data);
 }
 
 
 bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     negentropy::storage::BTreeMem* lmdbStorage;
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+    std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
+
+    std::cout << "erasing entry from storage, createdAt:" << createdAt << ",id:"; 
+    printHexString(data);
     
     //TODO: Error handling
-    return lmdbStorage->erase(createdAt, std::string_view(id->data, id->len));
+    return lmdbStorage->erase(createdAt, data);
 }
 
 
-const char* reconcile(void* negentropy, buffer* query){
+size_t reconcile(void* negentropy, buffer* query, buffer* output){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
-
-    std::string* output = new std::string();
+    std::string* out = new std::string();
     try {
-        *output = ngn_inst->reconcile(std::string_view(query->data, query->len));
+        *out = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len));
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
-        return NULL;
+        return 0;
     }
-    return output->c_str();
+    memcpy( output->data, out->c_str() ,out->size());
+    return out->size();
 }
 
 char *convert(const std::string & s)
@@ -116,7 +131,7 @@ const char* reconcile_with_ids(void* negentropy, buffer*  query, char* have_ids[
     std::vector<std::string> needIds;
 
     try {
-        *output = ngn_inst->reconcile(std::string_view(query->data, query->len), haveIds, needIds);
+        *output = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len), haveIds, needIds);
 
         *have_ids_len = haveIds.size();
         *need_ids_len = needIds.size();
