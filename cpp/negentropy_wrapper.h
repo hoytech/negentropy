@@ -28,10 +28,12 @@ EXTERNC bool storage_insert(void* storage, uint64_t createdAt, buffer* id);
 
 EXTERNC bool storage_erase(void* storage, uint64_t createdAt, buffer* id);
 
-EXTERNC size_t reconcile(void* negentropy, buffer* query,buffer* output);
+EXTERNC size_t reconcile(void* negentropy, buffer* query, buffer* output);
 
-EXTERNC const char* reconcile_with_ids(void* negentropy, buffer*  query, char* have_ids[], 
-                                        uint64_t *have_ids_len, char* need_ids[], uint64_t *need_ids_len);
+EXTERNC typedef void (*reconcile_cbk)(buffer* have_ids, uint64_t have_ids_len, buffer* need_ids, uint64_t need_ids_len, buffer* output);
+
+EXTERNC int reconcile_with_ids(void* negentropy, buffer*  query, reconcile_cbk cbk);
+
 
 #endif
 
