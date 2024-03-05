@@ -126,7 +126,7 @@ void transform(std::vector<std::string> &from_ids, buffer* to_ids)
    }
 }
 
-int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk){
+int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk, char* outptr){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -145,25 +145,28 @@ int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk){
         need_ids = (buffer*)malloc(need_ids_len*sizeof(buffer));
 
         std::cout << "have_ids_len:" << have_ids_len << "need_ids_len:" << need_ids_len << std::endl;
-        std::flush(std::cout);
 
         transform(haveIds, have_ids);
         transform(needIds, need_ids);
-        std::cout << "for debug" << std::endl;
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
         //TODO:Find a way to return this error and cleanup partially allocated memory if any
         return -1;
     }
-    buffer output;
+    buffer output = {0,NULL};
     if (out) {
         output.len = out.value().size();
         output.data = (unsigned char*)out.value().c_str();
         std::cout << "reconcile_with_ids output of reconcile is, len:" << out.value().size() << ", output:";
         printHexString(std::string_view(out.value()));
-        std::cout << "invoking callback" << std::endl;        
     }
-    cbk(have_ids, have_ids_len, need_ids, need_ids_len, &output);
+    std::cout << "invoking callback" << std::endl;
+    std::flush(std::cout);
+
+    cbk(have_ids, have_ids_len, need_ids, need_ids_len, &output, outptr);
+    std::cout << "invoked callback" << std::endl;
+    std::flush(std::cout);
+
     free(have_ids);
     free(need_ids);
     return 0;
