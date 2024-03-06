@@ -102,13 +102,22 @@ int main(){
    printf("reconcile returned with output of len %zu \n", outSize);
    b3.len = outSize;
 
-   outSize = reconcile_with_ids(ngn_inst1, &b3, &rec_callback);
+   //outSize = reconcile_with_ids(ngn_inst1, &b3, &rec_callback);
+
+   result res;
+   reconcile_with_ids_no_cbk(ngn_inst1, &b3, &res);
+   printf("needIds count:%llu , haveIds count: %llu \n",res.need_ids_len, res.have_ids_len);
+
+   for (int i=0; i < res.need_ids_len ; i++) {
+      printf("need ID at %d :", i);
+      printHexBuffer(res.need_ids[i]);
+   }
+
+   for (int j=0; j < res.have_ids_len ; j++) {
+      printf("need ID at %d :", j);
+      printHexBuffer(res.have_ids[j]);
+   }
 
    free(b3.data);
    free(b4.data);
-   //b3.len = len;
-   //b3.data = (char*)malloc(len);
-
-   //reconcile_with_ids(ngn_inst1, &b3, )
-   
 }
