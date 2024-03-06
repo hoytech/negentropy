@@ -1,4 +1,5 @@
 #include <iostream>
+#include <unordered_map>
 
 #include "negentropy.h"
 #include "negentropy/storage/BTreeMem.h"
