@@ -2,5 +2,5 @@
 	path = test/cpp/hoytech-cpp
 	url = https://github.com/hoytech/hoytech-cpp.git
 [submodule "test/cpp/lmdbxx"]
-	path = test/cpp/lmdbxx
+	path = cpp/vendor/lmdbxx
 	url = https://github.com/hoytech/lmdbxx.git
