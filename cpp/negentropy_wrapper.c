@@ -64,7 +64,9 @@ size_t negentropy_initiate(void* negentropy, buffer* out){
         return 0;
     }
     memcpy( out->data, output->c_str() ,output->size());
-    return output->size();
+    size_t outlen = output->size();
+    delete output;
+    return outlen;
 }
 
 void negentropy_setinitiator(void* negentropy){
