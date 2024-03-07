@@ -34,6 +34,16 @@ void* storage_new(const char* db_path, const char* name){
     return storage;
 }
 
+void storage_delete(void* storage){
+     negentropy::storage::BTreeMem* lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+     delete lmdbStorage;
+}
+
+void negentropy_delete(void* negentropy){
+    Negentropy<negentropy::storage::BTreeMem>* ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
+    delete ngn_inst;
+}
+
 void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     //TODO: Make these typecasts into macros??
     negentropy::storage::BTreeMem* lmdbStorage;
@@ -60,6 +70,7 @@ size_t negentropy_initiate(void* negentropy, buffer* out){
         std::cout << "output of initiate is, len:" << output->size() << ", output:";
         printHexString(std::string_view(*output));
     } catch(negentropy::err e){
+        std::cout << "Exception raised in initiate " << e.what() << std::endl;
         //TODO:Find a way to return this error
         return 0;
     }
@@ -112,6 +123,7 @@ size_t reconcile(void* negentropy, buffer* query, buffer* output){
         printHexString(std::string_view(*out));
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
+        std::cout << "Exception raised in reconcile " << e.what() << std::endl;
         return 0;
     }
     memcpy( output->data, out->c_str() ,out->size());
@@ -149,7 +161,7 @@ int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk, char*
         transform(haveIds, have_ids);
         transform(needIds, need_ids);
     } catch(negentropy::err e){
-        std::cout << "caught error "<< e.what() << std::endl;
+        std::cout << "exception raised in  reconcile_with_ids"<< e.what() << std::endl;
         //TODO:Find a way to return this error and cleanup partially allocated memory if any
         return -1;
     }

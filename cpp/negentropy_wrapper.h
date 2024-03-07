@@ -26,7 +26,11 @@ typedef struct _result_ {
 
 EXTERNC void* storage_new(const char* db_path, const char* name);
 
+EXTERNC void storage_delete(void* storage);
+
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
+
+EXTERNC void negentropy_delete(void* negentropy);
 
 EXTERNC size_t negentropy_initiate(void* negentropy, buffer* output);
 
