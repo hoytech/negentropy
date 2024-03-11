@@ -83,6 +83,8 @@ int main(){
    buffer b4 ;
    b4.len = 153600;
    b4.data = (unsigned char*)malloc(153600); 
+   
+   printf("storage size of st2 is %d \n",storage_size(st2));
 
    size_t outSize = negentropy_initiate(ngn_inst1, &b4);
    if(outSize == 0){

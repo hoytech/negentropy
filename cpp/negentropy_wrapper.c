@@ -34,6 +34,21 @@ void* storage_new(const char* db_path, const char* name){
     return storage;
 }
 
+void storage_delete(void* storage){
+     negentropy::storage::BTreeMem* lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+     delete lmdbStorage;
+}
+
+int storage_size(void* storage){
+    negentropy::storage::BTreeMem* lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+    return lmdbStorage->size();
+}
+
+void negentropy_delete(void* negentropy){
+    Negentropy<negentropy::storage::BTreeMem>* ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
+    delete ngn_inst;
+}
+
 void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     //TODO: Make these typecasts into macros??
     negentropy::storage::BTreeMem* lmdbStorage;
@@ -57,9 +72,10 @@ size_t negentropy_initiate(void* negentropy, buffer* out){
     std::string* output = new std::string();
     try {
         *output = ngn_inst->initiate();
-        std::cout << "output of initiate is, len:" << output->size() << ", output:";
-        printHexString(std::string_view(*output));
+/*         std::cout << "output of initiate is, len:" << output->size() << ", output:";
+        printHexString(std::string_view(*output)); */
     } catch(negentropy::err e){
+        std::cout << "Exception raised in initiate " << e.what() << std::endl;
         //TODO:Find a way to return this error
         return 0;
     }
@@ -82,8 +98,8 @@ bool storage_insert(void* storage, uint64_t createdAt, buffer* id){
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
     
-    std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:"; 
-    printHexString(data);
+/*     std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:"; 
+    printHexString(data); */
     
     //TODO: Error handling. Is it required?
     //How does out of memory get handled?
@@ -95,8 +111,8 @@ bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
 
-    std::cout << "erasing entry from storage, createdAt:" << createdAt << ",id:"; 
-    printHexString(data);
+/*     std::cout << "erasing entry from storage, createdAt:" << createdAt << ",id:"; 
+    printHexString(data); */
     
     //TODO: Error handling
     return lmdbStorage->erase(createdAt, data);
@@ -108,10 +124,11 @@ size_t reconcile(void* negentropy, buffer* query, buffer* output){
     std::string* out = new std::string();
     try {
         *out = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len));
-        std::cout << "reconcile output of reconcile is, len:" << out->size() << ", output:";
-        printHexString(std::string_view(*out));
+/*         std::cout << "reconcile output of reconcile is, len:" << out->size() << ", output:";
+        printHexString(std::string_view(*out)); */
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
+        std::cout << "Exception raised in reconcile " << e.what() << std::endl;
         return 0;
     }
     memcpy( output->data, out->c_str() ,out->size());
@@ -149,7 +166,7 @@ int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk, char*
         transform(haveIds, have_ids);
         transform(needIds, need_ids);
     } catch(negentropy::err e){
-        std::cout << "caught error "<< e.what() << std::endl;
+        std::cout << "exception raised in  reconcile_with_ids"<< e.what() << std::endl;
         //TODO:Find a way to return this error and cleanup partially allocated memory if any
         return -1;
     }
@@ -175,7 +192,7 @@ int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk, char*
 void transform_with_alloc(std::vector<std::string> &from_ids, buffer* to_ids)
 {
    for (int i=0; i < from_ids.size(); i ++){
-    to_ids[i].data = (unsigned char*) malloc(from_ids[i].size()*sizeof(unsigned char));  
+    to_ids[i].data = (unsigned char*) calloc(from_ids[i].size(), sizeof(unsigned char));
     to_ids[i].len = from_ids[i].size();
     memcpy(to_ids[i].data, from_ids[i].c_str(),to_ids[i].len);
    }
@@ -189,16 +206,20 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
     std::vector<std::string> haveIds, needIds;
     try {
         out = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len), haveIds, needIds);
-
         result->have_ids_len = haveIds.size();
         result->need_ids_len = needIds.size();
-        result->have_ids = (buffer*)malloc(result->have_ids_len*sizeof(buffer));
-        result->need_ids = (buffer*)malloc(result->need_ids_len*sizeof(buffer));
+        if (haveIds.size() > 0){
+            result->have_ids = (buffer*)calloc(result->have_ids_len, sizeof(buffer));
+            transform_with_alloc(haveIds, result->have_ids);
+        }
 
-        std::cout << "have_ids_len:" << result->have_ids_len << "need_ids_len:" << result->need_ids_len << std::endl;
+        if (needIds.size() > 0) {
+            result->need_ids = (buffer*)calloc(result->need_ids_len, sizeof(buffer));
+            transform_with_alloc(needIds, result->need_ids);
+        }
 
-        transform_with_alloc(haveIds, result->have_ids);
-        transform_with_alloc(needIds, result->need_ids);
+        // std::cout << "have_ids_len:" << result->have_ids_len << "need_ids_len:" << result->need_ids_len << std::endl;
+
 
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
@@ -208,25 +229,35 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
     buffer output = {0,NULL};
     if (out) {
         result->output.len = out.value().size();
-        result->output.data = (unsigned char*)malloc(out.value().size()*sizeof(unsigned char));
-        result->output.data = (unsigned char*)out.value().c_str();
-        std::cout << "reconcile_with_ids output of reconcile is, len:" << out.value().size() << ", output:";
-        printHexString(std::string_view(out.value()));
+        result->output.data = (unsigned char*)calloc(out.value().size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)out.value().c_str(),result->output.len) ;
+/*         std::cout << "reconcile_with_ids output of reconcile is, len:" << out.value().size() << ", output:";
+        printHexString(std::string_view(out.value()));  */
+    }else {
+        //std::cout << "reconcile_with_ids_no_cbk output is empty " << std::endl;
+        result->output.len = 0;
+        result->output.data = NULL;
     }
     return ;
 }
 
 //Note: This function assumes that all relevant heap memory is alloced and just tries to free
 void free_result(result* r){
-    free((void *) r->output.data);
+    if (r->output.len > 0) {
+        free((void *) r->output.data);
+    }
     
-    for (int i = 0; i < r->have_ids_len; i++) {
-        free((void *) r->have_ids[i].data);
+    if (r->have_ids_len > 0){
+        for (int i = 0; i < r->have_ids_len; i++) {
+            free((void *) r->have_ids[i].data);
+        }
+        free((void *)r->have_ids);
     }
-    free((void *)r->have_ids);
 
-    for (int i = 0; i < r->need_ids_len; i++) {
-        free((void *) r->need_ids[i].data);
+    if (r->need_ids_len > 0) {
+        for (int i = 0; i < r->need_ids_len; i++) {
+            free((void *) r->need_ids[i].data);
+        }
+        free((void *)r->need_ids);
     }
-    free((void *)r->need_ids);
 }
