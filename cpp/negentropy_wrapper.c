@@ -39,6 +39,11 @@ void storage_delete(void* storage){
      delete lmdbStorage;
 }
 
+int storage_size(void* storage){
+    negentropy::storage::BTreeMem* lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+    return lmdbStorage->size();
+}
+
 void negentropy_delete(void* negentropy){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
     delete ngn_inst;
@@ -229,7 +234,7 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
 /*         std::cout << "reconcile_with_ids output of reconcile is, len:" << out.value().size() << ", output:";
         printHexString(std::string_view(out.value()));  */
     }else {
-        std::cout << "reconcile_with_ids_no_cbk output is empty " << std::endl;
+        //std::cout << "reconcile_with_ids_no_cbk output is empty " << std::endl;
         result->output.len = 0;
         result->output.data = NULL;
     }

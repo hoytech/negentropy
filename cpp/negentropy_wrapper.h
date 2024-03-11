@@ -28,6 +28,8 @@ EXTERNC void* storage_new(const char* db_path, const char* name);
 
 EXTERNC void storage_delete(void* storage);
 
+EXTERNC int storage_size(void* storage);
+
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
 EXTERNC void negentropy_delete(void* negentropy);
