@@ -65,7 +65,7 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     return ne;
 }
 
-size_t negentropy_initiate(void* negentropy, buffer* out){
+int negentropy_initiate(void* negentropy, result* result){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -77,12 +77,18 @@ size_t negentropy_initiate(void* negentropy, buffer* out){
     } catch(negentropy::err e){
         std::cout << "Exception raised in initiate " << e.what() << std::endl;
         //TODO:Find a way to return this error
-        return 0;
+        return -1;
     }
-    memcpy( out->data, output->c_str() ,output->size());
-    size_t outlen = output->size();
+    if (output->size() > 0 ){
+        result->output.len = output->size();
+        result->output.data = (unsigned char*)calloc(output->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)output->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
     delete output;
-    return outlen;
+    return 0;
 }
 
 void negentropy_setinitiator(void* negentropy){
@@ -118,7 +124,7 @@ bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     return lmdbStorage->erase(createdAt, data);
 }
 
-size_t reconcile(void* negentropy, buffer* query, buffer* output){
+int reconcile(void* negentropy, buffer* query, result* result){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
     std::string* out = new std::string();
@@ -129,10 +135,17 @@ size_t reconcile(void* negentropy, buffer* query, buffer* output){
     } catch(negentropy::err e){
         //TODO:Find a way to return this error
         std::cout << "Exception raised in reconcile " << e.what() << std::endl;
-        return 0;
+        return -1;
     }
-    memcpy( output->data, out->c_str() ,out->size());
-    return out->size();
+    if (out->size() > 0 ){
+        result->output.len = out->size();
+        result->output.data = (unsigned char*)calloc(out->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)out->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
+    return 0;
 }
 
 void transform(std::vector<std::string> &from_ids, buffer* to_ids)

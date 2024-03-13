@@ -34,7 +34,7 @@ EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
 EXTERNC void negentropy_delete(void* negentropy);
 
-EXTERNC size_t negentropy_initiate(void* negentropy, buffer* output);
+EXTERNC int negentropy_initiate(void* negentropy, result* result);
 
 EXTERNC void negentropy_setinitiator(void* negentropy);
 
@@ -42,7 +42,7 @@ EXTERNC bool storage_insert(void* storage, uint64_t createdAt, buffer* id);
 
 EXTERNC bool storage_erase(void* storage, uint64_t createdAt, buffer* id);
 
-EXTERNC size_t reconcile(void* negentropy, buffer* query, buffer* output);
+EXTERNC int reconcile(void* negentropy, buffer* query, result* result);
 
 EXTERNC typedef void (*reconcile_cbk)(buffer* have_ids, uint64_t have_ids_len, buffer* need_ids, uint64_t need_ids_len, buffer* output, char* outptr );
 
