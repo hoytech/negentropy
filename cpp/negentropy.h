@@ -50,7 +50,6 @@ struct Negentropy {
 
         std::string output;
         output.push_back(PROTOCOL_VERSION);
-        std::cout << "storage size:" << storage.size() << std::endl;
         output += splitRange(0, storage.size(), Bound(MAX_U64));
 
         return output;

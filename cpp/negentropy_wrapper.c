@@ -29,7 +29,7 @@ void* storage_new(const char* db_path, const char* name){
         btreeDbi = negentropy::storage::BTreeMem::setupDB(txn, name);
         txn.commit();
     } */
-    //TODO: Finish constructor 
+
     storage = new negentropy::storage::BTreeMem();
     return storage;
 }
@@ -57,15 +57,15 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
 
     Negentropy<negentropy::storage::BTreeMem>* ne;
     try{
-    ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
+        ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
     }catch(negentropy::err e){
-        //TODO:Find a way to return this error
         return NULL;
     }
     return ne;
 }
 
-size_t negentropy_initiate(void* negentropy, buffer* out){
+// Returns -1 if already initiated.
+int negentropy_initiate(void* negentropy, result* result){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -75,14 +75,19 @@ size_t negentropy_initiate(void* negentropy, buffer* out){
 /*         std::cout << "output of initiate is, len:" << output->size() << ", output:";
         printHexString(std::string_view(*output)); */
     } catch(negentropy::err e){
-        std::cout << "Exception raised in initiate " << e.what() << std::endl;
-        //TODO:Find a way to return this error
-        return 0;
+        //std::cout << "Exception raised in initiate " << e.what() << std::endl;
+        return -1;
     }
-    memcpy( out->data, output->c_str() ,output->size());
-    size_t outlen = output->size();
+    if (output->size() > 0 ){
+        result->output.len = output->size();
+        result->output.data = (unsigned char*)calloc(output->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)output->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
     delete output;
-    return outlen;
+    return 0;
 }
 
 void negentropy_setinitiator(void* negentropy){
@@ -118,7 +123,7 @@ bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     return lmdbStorage->erase(createdAt, data);
 }
 
-size_t reconcile(void* negentropy, buffer* query, buffer* output){
+int reconcile(void* negentropy, buffer* query, result* result){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
     std::string* out = new std::string();
@@ -127,12 +132,22 @@ size_t reconcile(void* negentropy, buffer* query, buffer* output){
 /*         std::cout << "reconcile output of reconcile is, len:" << out->size() << ", output:";
         printHexString(std::string_view(*out)); */
     } catch(negentropy::err e){
-        //TODO:Find a way to return this error
-        std::cout << "Exception raised in reconcile " << e.what() << std::endl;
-        return 0;
+        //All errors returned are non-recoverable errors.
+        //So passing on the error message upwards
+        //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
+        return -1;
     }
-    memcpy( output->data, out->c_str() ,out->size());
-    return out->size();
+    if (out->size() > 0 ){
+        result->output.len = out->size();
+        result->output.data = (unsigned char*)calloc(out->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)out->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
+    return 0;
 }
 
 void transform(std::vector<std::string> &from_ids, buffer* to_ids)
@@ -198,7 +213,7 @@ void transform_with_alloc(std::vector<std::string> &from_ids, buffer* to_ids)
    }
 }
 
-void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
+int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -223,8 +238,9 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
 
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
-        //TODO:Find a way to return this error and cleanup partially allocated memory if any
-        return ;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
+        return -1;
     }
     buffer output = {0,NULL};
     if (out) {
@@ -238,7 +254,7 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
         result->output.len = 0;
         result->output.data = NULL;
     }
-    return ;
+    return 0;
 }
 
 //Note: This function assumes that all relevant heap memory is alloced and just tries to free
@@ -259,5 +275,9 @@ void free_result(result* r){
             free((void *) r->need_ids[i].data);
         }
         free((void *)r->need_ids);
+    }
+
+    if (r->error != NULL && strlen(r->error) > 0){
+        free((void *)r->error);
     }
 }

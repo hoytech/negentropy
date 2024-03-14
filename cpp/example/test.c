@@ -81,45 +81,52 @@ int main(){
    }
  
    buffer b4 ;
-   b4.len = 153600;
-   b4.data = (unsigned char*)malloc(153600); 
+   b4.len = 0;
+   b4.data = (unsigned char*)malloc(37*sizeof(unsigned char));
    
    printf("storage size of st2 is %d \n",storage_size(st2));
-
-   size_t outSize = negentropy_initiate(ngn_inst1, &b4);
-   if(outSize == 0){
+   result res;
+   int ret1 = negentropy_initiate(ngn_inst1, &res);
+   if(ret1 < 0){
     perror("failed to initiate negentropy instance");
    }
-   printf("initiated negentropy successfully with output of len %zu \n", outSize);
-   b4.len = outSize;
+   printf("initiated negentropy successfully with output of len %llu \n", res.output.len);
+   b4.len = res.output.len;
+   memcpy(b4.data, res.output.data, res.output.len); 
+   free_result(&res);
 
    buffer b3 ;
-   b3.len = 153600;
-   b3.data = (unsigned char*)malloc(153600);
+   b3.len = 0;
+   b3.data = (unsigned char*)malloc(69*sizeof(unsigned char));
 
-   outSize = reconcile(ngn_inst2, &b4, &b3); 
-   if(outSize == 0){
-    perror("nothing to reconcile");
+   ret1 = reconcile(ngn_inst2, &b4, &res); 
+   if(ret1 < 0){
+    perror("error from reconcile");
    }
-   printf("reconcile returned with output of len %zu \n", outSize);
-   b3.len = outSize;
-
+   if (res.output.len == 0){
+      perror("nothing to reconcile");
+   } 
+   printf("reconcile returned with output of len %llu \n", res.output.len);
+   b3.len = res.output.len;
+   memcpy(b3.data, res.output.data, res.output.len); 
+   free_result(&res);
    //outSize = reconcile_with_ids(ngn_inst1, &b3, &rec_callback);
 
-   result res;
-   reconcile_with_ids_no_cbk(ngn_inst1, &b3, &res);
-   printf("needIds count:%llu , haveIds count: %llu \n",res.need_ids_len, res.have_ids_len);
+   result res1;
+   reconcile_with_ids_no_cbk(ngn_inst1, &b3, &res1);
+   printf("needIds count:%llu , haveIds count: %llu \n",res1.need_ids_len, res1.have_ids_len);
 
-   for (int i=0; i < res.need_ids_len ; i++) {
+   for (int i=0; i < res1.need_ids_len ; i++) {
       printf("need ID at %d :", i);
-      printHexBuffer(res.need_ids[i]);
+      printHexBuffer(res1.need_ids[i]);
    }
 
-   for (int j=0; j < res.have_ids_len ; j++) {
+   for (int j=0; j < res1.have_ids_len ; j++) {
       printf("need ID at %d :", j);
-      printHexBuffer(res.have_ids[j]);
+      printHexBuffer(res1.have_ids[j]);
    }
 
    free(b3.data);
    free(b4.data);
+   free_result(&res1);
 }
