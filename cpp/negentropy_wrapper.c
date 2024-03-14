@@ -29,7 +29,7 @@ void* storage_new(const char* db_path, const char* name){
         btreeDbi = negentropy::storage::BTreeMem::setupDB(txn, name);
         txn.commit();
     } */
-    //TODO: Finish constructor 
+
     storage = new negentropy::storage::BTreeMem();
     return storage;
 }
@@ -57,14 +57,14 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
 
     Negentropy<negentropy::storage::BTreeMem>* ne;
     try{
-    ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
+        ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
     }catch(negentropy::err e){
-        //TODO:Find a way to return this error
         return NULL;
     }
     return ne;
 }
 
+// Returns -1 if already initiated.
 int negentropy_initiate(void* negentropy, result* result){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
@@ -75,8 +75,7 @@ int negentropy_initiate(void* negentropy, result* result){
 /*         std::cout << "output of initiate is, len:" << output->size() << ", output:";
         printHexString(std::string_view(*output)); */
     } catch(negentropy::err e){
-        std::cout << "Exception raised in initiate " << e.what() << std::endl;
-        //TODO:Find a way to return this error
+        //std::cout << "Exception raised in initiate " << e.what() << std::endl;
         return -1;
     }
     if (output->size() > 0 ){
@@ -133,8 +132,11 @@ int reconcile(void* negentropy, buffer* query, result* result){
 /*         std::cout << "reconcile output of reconcile is, len:" << out->size() << ", output:";
         printHexString(std::string_view(*out)); */
     } catch(negentropy::err e){
-        //TODO:Find a way to return this error
-        std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        //All errors returned are non-recoverable errors.
+        //So passing on the error message upwards
+        //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
         return -1;
     }
     if (out->size() > 0 ){
@@ -211,7 +213,7 @@ void transform_with_alloc(std::vector<std::string> &from_ids, buffer* to_ids)
    }
 }
 
-void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
+int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
     Negentropy<negentropy::storage::BTreeMem> *ngn_inst;
     ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
 
@@ -236,8 +238,9 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
 
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
-        //TODO:Find a way to return this error and cleanup partially allocated memory if any
-        return ;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
+        return -1;
     }
     buffer output = {0,NULL};
     if (out) {
@@ -251,7 +254,7 @@ void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result)
         result->output.len = 0;
         result->output.data = NULL;
     }
-    return ;
+    return 0;
 }
 
 //Note: This function assumes that all relevant heap memory is alloced and just tries to free
@@ -272,5 +275,9 @@ void free_result(result* r){
             free((void *) r->need_ids[i].data);
         }
         free((void *)r->need_ids);
+    }
+
+    if (r->error != NULL && strlen(r->error) > 0){
+        free((void *)r->error);
     }
 }

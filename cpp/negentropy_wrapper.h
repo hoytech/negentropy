@@ -19,6 +19,7 @@ typedef struct _result_ {
   uint64_t need_ids_len;
   buffer* have_ids;
   buffer* need_ids;
+  char* error;
 } result;
 
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
@@ -48,7 +49,7 @@ EXTERNC typedef void (*reconcile_cbk)(buffer* have_ids, uint64_t have_ids_len, b
 
 EXTERNC int reconcile_with_ids(void* negentropy, buffer*  query, reconcile_cbk cbk, char* outptr);
 
-EXTERNC void reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result);
+EXTERNC int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result);
 
 EXTERNC void free_result(result* result);
 
