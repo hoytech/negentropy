@@ -31,6 +31,10 @@ EXTERNC void storage_delete(void* storage);
 
 EXTERNC int storage_size(void* storage);
 
+EXTERNC void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp);
+
+EXTERNC void subrange_delete(void* range);
+
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
 EXTERNC void negentropy_delete(void* negentropy);

@@ -4,6 +4,7 @@
 #include "negentropy.h"
 #include "negentropy/storage/BTreeMem.h"
 #include "negentropy_wrapper.h"
+#include "negentropy/storage/SubRange.h"
 
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
@@ -42,6 +43,22 @@ void storage_delete(void* storage){
 int storage_size(void* storage){
     negentropy::storage::BTreeMem* lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     return lmdbStorage->size();
+}
+
+void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp){
+    negentropy::storage::BTreeMem* st = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+    negentropy::storage::SubRange* subRange = NULL;
+    try {
+    subRange = new negentropy::storage::SubRange(*st, negentropy::Bound(startTimeStamp), negentropy::Bound(endTimeStamp));
+    } catch (negentropy::err e){
+        return NULL;
+    }
+    return subRange;
+}
+
+void subrange_delete(void* range){
+    negentropy::storage::SubRange* subRange = reinterpret_cast<negentropy::storage::SubRange*>(range);
+    delete subRange;
 }
 
 void negentropy_delete(void* negentropy){

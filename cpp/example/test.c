@@ -129,4 +129,10 @@ int main(){
    free(b3.data);
    free(b4.data);
    free_result(&res1);
+
+   void* subrange = subrange_new(st1, 0 , UINT64_MAX);
+   if (subrange == NULL){
+      perror("failed to init subrange");
+   }
+   printf("subrange init successful");
 }
