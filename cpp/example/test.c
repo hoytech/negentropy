@@ -35,19 +35,13 @@ int main(){
    if(st1 == NULL){
     perror("failed to create storage");
    }
-   void* ngn_inst1 = negentropy_new(st1, 153600);
-   if(ngn_inst1 == NULL){
-    perror("failed to create negentropy instance");
-   }
+
 
       void* st2 = storage_new("","");
    if(st2 == NULL){
     perror("failed to create storage");
    }
-   void* ngn_inst2 = negentropy_new(st2, 153600);
-   if(ngn_inst2 == NULL){
-    perror("failed to create negentropy instance");
-   }
+
 
    unsigned char m1[] =  {0x6a, 0xdf, 0xaa, 0xe0, 0x31, 0xeb, 0x61, 0xa8, \
                           0x3c, 0xff, 0x9c, 0xfd, 0xd2, 0xae, 0xf6, 0xed, \
@@ -85,8 +79,32 @@ int main(){
    b4.data = (unsigned char*)malloc(37*sizeof(unsigned char));
    
    printf("storage size of st2 is %d \n",storage_size(st2));
+
+   void* subrange = subrange_new(st2, 0 , UINT64_MAX);
+   if (subrange == NULL){
+      perror("failed to init subrange");
+   }
+   printf("subrange init successful");
+
+   void* subrange1 = subrange_new(st1, 0 , UINT64_MAX);
+   if (subrange == NULL){
+      perror("failed to init subrange");
+   }
+   printf("subrange init successful");
+
+   void* ngn_inst1 = negentropy_new(subrange1, 153600);
+   if(ngn_inst1 == NULL){
+    perror("failed to create negentropy instance");
+   }
+
+   void* ngn_inst2 = negentropy_new(subrange, 153600);
+   if(ngn_inst2 == NULL){
+    perror("failed to create negentropy instance");
+   }
+
+
    result res;
-   int ret1 = negentropy_initiate(ngn_inst1, &res);
+   int ret1 = negentropy_subrange_initiate(ngn_inst1, &res);
    if(ret1 < 0){
     perror("failed to initiate negentropy instance");
    }
@@ -99,7 +117,7 @@ int main(){
    b3.len = 0;
    b3.data = (unsigned char*)malloc(69*sizeof(unsigned char));
 
-   ret1 = reconcile(ngn_inst2, &b4, &res); 
+   ret1 = reconcile_subrange(ngn_inst2, &b4, &res); 
    if(ret1 < 0){
     perror("error from reconcile");
    }
@@ -113,7 +131,7 @@ int main(){
    //outSize = reconcile_with_ids(ngn_inst1, &b3, &rec_callback);
 
    result res1;
-   reconcile_with_ids_no_cbk(ngn_inst1, &b3, &res1);
+   reconcile_with_ids_subrange_no_cbk(ngn_inst1, &b3, &res1);
    printf("needIds count:%llu , haveIds count: %llu \n",res1.need_ids_len, res1.have_ids_len);
 
    for (int i=0; i < res1.need_ids_len ; i++) {
@@ -130,9 +148,9 @@ int main(){
    free(b4.data);
    free_result(&res1);
 
-   void* subrange = subrange_new(st1, 0 , UINT64_MAX);
-   if (subrange == NULL){
-      perror("failed to init subrange");
-   }
-   printf("subrange init successful");
+   subrange_delete(subrange);
+   subrange_delete(subrange1);
+
+   printf("storage after subrange deletion, st1 size: %d, st2 size: %d.", storage_size(st1), storage_size(st2));
+
 }

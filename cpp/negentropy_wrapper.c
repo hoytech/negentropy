@@ -45,22 +45,6 @@ int storage_size(void* storage){
     return lmdbStorage->size();
 }
 
-void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp){
-    negentropy::storage::BTreeMem* st = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
-    negentropy::storage::SubRange* subRange = NULL;
-    try {
-    subRange = new negentropy::storage::SubRange(*st, negentropy::Bound(startTimeStamp), negentropy::Bound(endTimeStamp));
-    } catch (negentropy::err e){
-        return NULL;
-    }
-    return subRange;
-}
-
-void subrange_delete(void* range){
-    negentropy::storage::SubRange* subRange = reinterpret_cast<negentropy::storage::SubRange*>(range);
-    delete subRange;
-}
-
 void negentropy_delete(void* negentropy){
     Negentropy<negentropy::storage::BTreeMem>* ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::BTreeMem>*>(negentropy);
     delete ngn_inst;
@@ -298,3 +282,148 @@ void free_result(result* r){
         free((void *)r->error);
     }
 }
+
+/*SubRange specific functions
+TODO: These and above methods need to be optimized to reduce code duplication*/
+
+void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp){
+    negentropy::storage::BTreeMem* st = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
+    negentropy::storage::SubRange* subRange = NULL;
+    try {
+    subRange = new negentropy::storage::SubRange(*st, negentropy::Bound(startTimeStamp), negentropy::Bound(endTimeStamp));
+    } catch (negentropy::err e){
+        return NULL;
+    }
+    return subRange;
+}
+
+void subrange_delete(void* range){
+    negentropy::storage::SubRange* subRange = reinterpret_cast<negentropy::storage::SubRange*>(range);
+    delete subRange;
+}
+
+void negentropy_subrange_delete(void* negentropy){
+    Negentropy<negentropy::storage::SubRange>* ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::SubRange>*>(negentropy);
+    delete ngn_inst;
+}
+
+void* negentropy_subrange_new(void* subrange, uint64_t frameSizeLimit){
+    //TODO: Make these typecasts into macros??
+    negentropy::storage::SubRange* sub_range;
+    //TODO: reinterpret cast is risky, need to use more safe type conversion.
+    sub_range = reinterpret_cast<negentropy::storage::SubRange*>(subrange);
+
+    Negentropy<negentropy::storage::SubRange>* ne;
+    try{
+        ne = new Negentropy<negentropy::storage::SubRange>(*sub_range, frameSizeLimit);
+    }catch(negentropy::err e){
+        return NULL;
+    }
+    return ne;
+}
+
+// Returns -1 if already initiated.
+int negentropy_subrange_initiate(void* negentropy, result* result){
+    Negentropy<negentropy::storage::SubRange>* ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::SubRange>*>(negentropy);
+
+    std::string* output = new std::string();
+    try {
+        *output = ngn_inst->initiate();
+/*         std::cout << "output of initiate is, len:" << output->size() << ", output:";
+        printHexString(std::string_view(*output)); */
+    } catch(negentropy::err e){
+        //std::cout << "Exception raised in initiate " << e.what() << std::endl;
+        return -1;
+    }
+    if (output->size() > 0 ){
+        result->output.len = output->size();
+        result->output.data = (unsigned char*)calloc(output->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)output->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
+    delete output;
+    return 0;
+}
+
+void negentropy_subrange_setinitiator(void* negentropy){
+    Negentropy<negentropy::storage::SubRange> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::SubRange>*>(negentropy);
+
+    ngn_inst->setInitiator();
+
+}
+
+int reconcile_subrange(void* negentropy, buffer* query, result* result){
+    Negentropy<negentropy::storage::SubRange> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::SubRange>*>(negentropy);
+    std::string* out = new std::string();
+    try {
+        *out = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len));
+/*         std::cout << "reconcile output of reconcile is, len:" << out->size() << ", output:";
+        printHexString(std::string_view(*out)); */
+    } catch(negentropy::err e){
+        //All errors returned are non-recoverable errors.
+        //So passing on the error message upwards
+        //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
+        return -1;
+    }
+    if (out->size() > 0 ){
+        result->output.len = out->size();
+        result->output.data = (unsigned char*)calloc(out->size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)out->c_str(),result->output.len) ;
+    }else {
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
+    return 0;
+}
+
+int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result* result){
+    Negentropy<negentropy::storage::SubRange> *ngn_inst;
+    ngn_inst = reinterpret_cast<Negentropy<negentropy::storage::SubRange>*>(negentropy);
+
+    std::optional<std::string> out;
+    std::vector<std::string> haveIds, needIds;
+    try {
+        out = ngn_inst->reconcile(std::string_view(reinterpret_cast< char const* >(query->data), query->len), haveIds, needIds);
+        result->have_ids_len = haveIds.size();
+        result->need_ids_len = needIds.size();
+        if (haveIds.size() > 0){
+            result->have_ids = (buffer*)calloc(result->have_ids_len, sizeof(buffer));
+            transform_with_alloc(haveIds, result->have_ids);
+        }
+
+        if (needIds.size() > 0) {
+            result->need_ids = (buffer*)calloc(result->need_ids_len, sizeof(buffer));
+            transform_with_alloc(needIds, result->need_ids);
+        }
+
+        // std::cout << "have_ids_len:" << result->have_ids_len << "need_ids_len:" << result->need_ids_len << std::endl;
+
+
+    } catch(negentropy::err e){
+        std::cout << "caught error "<< e.what() << std::endl;
+        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        strcpy(result->error,e.what());
+        return -1;
+    }
+    buffer output = {0,NULL};
+    if (out) {
+        result->output.len = out.value().size();
+        result->output.data = (unsigned char*)calloc(out.value().size(), sizeof(unsigned char));
+        memcpy(result->output.data, (unsigned char*)out.value().c_str(),result->output.len) ;
+/*         std::cout << "reconcile_with_ids output of reconcile is, len:" << out.value().size() << ", output:";
+        printHexString(std::string_view(out.value()));  */
+    }else {
+        //std::cout << "reconcile_with_ids_no_cbk output is empty " << std::endl;
+        result->output.len = 0;
+        result->output.data = NULL;
+    }
+    return 0;
+}
+

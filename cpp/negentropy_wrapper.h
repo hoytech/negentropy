@@ -31,10 +31,22 @@ EXTERNC void storage_delete(void* storage);
 
 EXTERNC int storage_size(void* storage);
 
+//SubRange methods
 EXTERNC void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp);
 
 EXTERNC void subrange_delete(void* range);
 
+EXTERNC void* negentropy_subrange_new(void* subrange, uint64_t frameSizeLimit);
+
+EXTERNC void negentropy_subrange_delete(void* negentropy);
+
+EXTERNC int negentropy_subrange_initiate(void* negentropy, result* result);
+
+EXTERNC int reconcile_subrange(void* negentropy, buffer* query, result* result);
+
+EXTERNC int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result* result);
+
+//End of SubRange methods
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
 EXTERNC void negentropy_delete(void* negentropy);
