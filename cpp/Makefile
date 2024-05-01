@@ -17,7 +17,7 @@ precompiled-header:
 	g++ -O0 --std=c++20 -Wall -fexceptions -g negentropy.h $(INCS)
 
 shared-lib:
-	g++ -O0 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) negentropy_wrapper.c -lcrypto -lssl -L/opt/homebrew/lib/
+	g++ -O0 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) negentropy_wrapper.cpp -lcrypto -lssl -L/opt/homebrew/lib/
 
 clean:
 	rm -f $(TARGET) negentropy.h.gch libnegentropy.so

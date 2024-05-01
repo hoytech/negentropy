@@ -31,22 +31,6 @@ EXTERNC void storage_delete(void* storage);
 
 EXTERNC int storage_size(void* storage);
 
-//SubRange methods
-EXTERNC void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp);
-
-EXTERNC void subrange_delete(void* range);
-
-EXTERNC void* negentropy_subrange_new(void* subrange, uint64_t frameSizeLimit);
-
-EXTERNC void negentropy_subrange_delete(void* negentropy);
-
-EXTERNC int negentropy_subrange_initiate(void* negentropy, result* result);
-
-EXTERNC int reconcile_subrange(void* negentropy, buffer* query, result* result);
-
-EXTERNC int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result* result);
-
-//End of SubRange methods
 EXTERNC void* negentropy_new(void* storage, uint64_t frameSizeLimit);
 
 EXTERNC void negentropy_delete(void* negentropy);
@@ -68,6 +52,25 @@ EXTERNC int reconcile_with_ids(void* negentropy, buffer*  query, reconcile_cbk c
 EXTERNC int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result);
 
 EXTERNC void free_result(result* result);
+
+//SubRange methods
+EXTERNC void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp);
+
+EXTERNC void subrange_delete(void* range);
+
+EXTERNC void* negentropy_subrange_new(void* subrange, uint64_t frameSizeLimit);
+
+EXTERNC void negentropy_subrange_delete(void* negentropy);
+
+EXTERNC int negentropy_subrange_initiate(void* negentropy, result* result);
+
+EXTERNC int reconcile_subrange(void* negentropy, buffer* query, result* result);
+
+EXTERNC int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result* result);
+
+EXTERNC int subrange_size(void* storage);
+
+//End of SubRange methods
 
 #endif
 
