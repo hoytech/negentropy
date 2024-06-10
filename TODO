@@ -1,3 +1,7 @@
+btree
+  optimise splitting: should be able to re-use previous range's summary to avoid one traversal
+  binary search within a node
+
 range randomisation
 
 release js package to npm
