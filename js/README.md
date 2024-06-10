@@ -13,7 +13,7 @@ First, you need to create a storage instance. Currently only `Vector` is impleme
 Next, add all the items in your collection, and `seal()`:
 
     for (let item of myItems) {
-        storage.insert(timestamp, id);
+        storage.insert(item.timestamp, item.id);
     }
 
     ne.seal();
@@ -27,20 +27,20 @@ Create a Negentropy object:
 
     let ne = new Negentropy(storage, 50_000);
 
-* The second parameter (`50'000` above) is the `frameSizeLimit`. This can be omitted (or `0`) to permit unlimited-sized frames.
+* The second parameter (`50_000` above) is the `frameSizeLimit`. This can be omitted (or `0`) to permit unlimited-sized frames.
 
 On the client-side, create an initial message, and then transmit it to the server, receive the response, and `reconcile` until complete (signified by returning `null` for `newMsg`):
 
     let msg = await ne.initiate();
 
-    while (msg.length !== null) {
+    while (msg !== null) {
         let response = queryServer(msg);
         let [newMsg, have, need] = await ne.reconcile(msg);
         msg = newMsg;
         // handle have/need
     }
 
-*  The output `msg`s and the IDs in `have`/`need` are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
+*  The output `msg`s and the IDs in the `have`/`need` arrays are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
 
 The server-side is similar, except it doesn't create an initial message, there are no `have`/`need` arrays, and `newMsg` will never be `null`:
 
