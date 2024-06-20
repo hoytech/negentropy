@@ -12,6 +12,8 @@ sub harnessTypeToCmd {
         return 'node js/harness.js';
     } elsif ($harnessType eq 'rust') {
         return '../../rust-negentropy/target/debug/harness';
+    } elsif ($harnessType eq 'go') {
+        return 'go run go/harness.go';
     }
 
     die "unknown harness type: $harnessType";

@@ -217,7 +217,7 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 
 * For the Rust implementation, check out its repo in the same directory as the `negentropy` repo, build the `harness` commands for both C++ and Rust, and then inside `negentropy/test/` directory running `perl test.pl cpp,rust`
 
-
+* For the golang implementation, checkout the repo in the same directory as the `negentropy` repo, then inside `negentropy/test/` directory running `perl test.pl cpp,go`
 
 ## Applications
 
