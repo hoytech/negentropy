@@ -190,6 +190,7 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [C++](cpp/README.md) | reference | Stable | Vector, BTreeMem, BTreeLMDB, SubRange |
 | [Javascript](js/README.md) | reference | Stable | Vector |
 | [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
+| [Go](https://github.com/illuzen/go-negentropy) | Illuzen | Stable | Vector |
 
 
 
