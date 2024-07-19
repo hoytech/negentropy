@@ -202,6 +202,8 @@ In order to test a new language you should create a "harness", which is a basic 
 
 Harnesses may require some setup before they are usable. For example, to use the C++ harness you must first run `make` within the `test/cpp/` directory.
 
+In order to run the test-suite, you'll need the perl module [Session::Token](https://metacpan.org/pod/Session::Token) (`libsession-token-perl` Debian/Ubuntu package).
+
 Once setup, you should be able to run something like `perl test.pl cpp,js` from the `test/` directory. This will perform the following:
 
 * For each combination of language run the following fuzz tests:

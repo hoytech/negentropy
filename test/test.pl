@@ -80,7 +80,7 @@ sub run {
     print "RUN: $cmd\n";
 
     system("echo 'RUN: $cmd' >>negent-test.log");
-    system("$cmd >>negent-test.log 2>&1") && die "test failure";
+    system("$cmd >>negent-test.log 2>&1") && die "test failure (see negent-test.log file)";
     system("echo '----------' >>negent-test.log");
 }
 
