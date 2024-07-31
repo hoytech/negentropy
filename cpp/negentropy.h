@@ -1,6 +1,7 @@
 // (C) 2023 Doug Hoyte. MIT license
 
-#pragma once
+#ifndef _NEGENTROPY_H_
+#define _NEGENTROPY_H_
 
 #include <string.h>
 
@@ -321,3 +322,5 @@ struct Negentropy {
 
 template<typename T>
 using Negentropy = negentropy::Negentropy<T>;
+
+#endif
