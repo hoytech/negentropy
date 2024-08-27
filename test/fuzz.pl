@@ -57,25 +57,44 @@ my ($outfile1, $outfile2);
     $pid2 = open2($outfile2, $infile2, $harnessCmd2);
 }
 
-my $num = $minRecs + rnd($maxRecs - $minRecs);
 
-for (1..$num) {
-    my $created = 1677970534 + rnd($num);
-    my $id = $stgen->get;
+if ($ENV{SET1} && $ENV{SET2}) {
+    my $cb = sub {
+        my ($filename, $ids, $infile) = @_;
 
-    my $modeRnd = rand();
+        open(my $fh, '<', $filename) || die "unable to open $filename: $!";
+        while (<$fh>) {
+            die "unparseable line: $_" unless /^(?:item,|)(\d+),(\w{64})$/;
+            my ($created, $id) = ($1, $2);
+            die "duplicate line: $_" if $ids->{$id};
+            print $infile "item,$created,$id\n";
+            $ids->{$id} = 1;
+        }
+    };
 
-    if ($modeRnd < $prob1) {
-        print $infile1 "item,$created,$id\n";
-        $ids1->{$id} = 1;
-    } elsif ($modeRnd < $prob1 + $prob2) {
-        print $infile2 "item,$created,$id\n";
-        $ids2->{$id} = 1;
-    } else {
-        print $infile1 "item,$created,$id\n";
-        print $infile2 "item,$created,$id\n";
-        $ids1->{$id} = 1;
-        $ids2->{$id} = 1;
+    $cb->($ENV{SET1}, $ids1, $infile1);
+    $cb->($ENV{SET2}, $ids2, $infile2);
+} else {
+    my $num = $minRecs + rnd($maxRecs - $minRecs);
+
+    for (1..$num) {
+        my $created = 1677970534 + rnd($num);
+        my $id = $stgen->get;
+
+        my $modeRnd = rand();
+
+        if ($modeRnd < $prob1) {
+            print $infile1 "item,$created,$id\n";
+            $ids1->{$id} = 1;
+        } elsif ($modeRnd < $prob1 + $prob2) {
+            print $infile2 "item,$created,$id\n";
+            $ids2->{$id} = 1;
+        } else {
+            print $infile1 "item,$created,$id\n";
+            print $infile2 "item,$created,$id\n";
+            $ids1->{$id} = 1;
+            $ids2->{$id} = 1;
+        }
     }
 }
 
