@@ -340,25 +340,25 @@ class Negentropy {
                 let theirElems = {}; // stringified Uint8Array -> original Uint8Array (or hex)
                 for (let i = 0; i < numIds; i++) {
                     let e = getBytes(query, ID_SIZE);
-                    theirElems[e] = e;
+                    if (this.isInitiator) theirElems[e] = e;
                 }
-
-                this.storage.iterate(lower, upper, (item) => {
-                    let k = item.id;
-
-                    if (!theirElems[k]) {
-                        // ID exists on our side, but not their side
-                        if (this.isInitiator) haveIds.push(this.wantUint8ArrayOutput ? k : uint8ArrayToHex(k));
-                    } else {
-                        // ID exists on both sides
-                        delete theirElems[k];
-                    }
-
-                    return true;
-                });
 
                 if (this.isInitiator) {
                     skip = true;
+
+                    this.storage.iterate(lower, upper, (item) => {
+                        let k = item.id;
+
+                        if (!theirElems[k]) {
+                            // ID exists on our side, but not their side
+                            if (this.isInitiator) haveIds.push(this.wantUint8ArrayOutput ? k : uint8ArrayToHex(k));
+                        } else {
+                            // ID exists on both sides
+                            delete theirElems[k];
+                        }
+
+                        return true;
+                    });
 
                     for (let v of Object.values(theirElems)) {
                         // ID exists on their side, but not our side

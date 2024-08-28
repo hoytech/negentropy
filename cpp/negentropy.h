@@ -128,25 +128,25 @@ struct Negentropy {
                 std::unordered_set<std::string> theirElems;
                 for (uint64_t i = 0; i < numIds; i++) {
                     auto e = getBytes(query, ID_SIZE);
-                    theirElems.insert(e);
+                    if (isInitiator) theirElems.insert(e);
                 }
-
-                storage.iterate(lower, upper, [&](const Item &item, size_t){
-                    auto k = std::string(item.getId());
-
-                    if (theirElems.find(k) == theirElems.end()) {
-                        // ID exists on our side, but not their side
-                        if (isInitiator) haveIds.emplace_back(k);
-                    } else {
-                        // ID exists on both sides
-                        theirElems.erase(k);
-                    }
-
-                    return true;
-                });
 
                 if (isInitiator) {
                     skip = true;
+
+                    storage.iterate(lower, upper, [&](const Item &item, size_t){
+                        auto k = std::string(item.getId());
+
+                        if (theirElems.find(k) == theirElems.end()) {
+                            // ID exists on our side, but not their side
+                            haveIds.emplace_back(k);
+                        } else {
+                            // ID exists on both sides
+                            theirElems.erase(k);
+                        }
+
+                        return true;
+                    });
 
                     for (const auto &k : theirElems) {
                         // ID exists on their side, but not our side
