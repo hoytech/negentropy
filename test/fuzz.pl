@@ -38,6 +38,10 @@ my $prob3 = $ENV{P3} // 98;
 }
 
 
+my $numSegs = $ENV{NUM_SEGS} // 50000;
+my $recsPerSeg = $ENV{RECS_PER_SEG} // 50;
+
+
 my $ids1 = {};
 my $ids2 = {};
 
@@ -74,6 +78,33 @@ if ($ENV{SET1} && $ENV{SET2}) {
 
     $cb->($ENV{SET1}, $ids1, $infile1);
     $cb->($ENV{SET2}, $ids2, $infile2);
+} elsif ($ENV{CLUSTERED}) {
+    my $segments = rnd($numSegs);
+    my $curr = 0;
+
+    for (1..$segments) {
+        my $num = rnd($recsPerSeg) + 1;
+
+        my $modeRnd = rand();
+
+        for (1..$num) {
+            my $created = 1677970534 + $curr++;
+            my $id = $stgen->get;
+
+            if ($modeRnd < $prob1) {
+                print $infile1 "item,$created,$id\n";
+                $ids1->{$id} = 1;
+            } elsif ($modeRnd < $prob1 + $prob2) {
+                print $infile2 "item,$created,$id\n";
+                $ids2->{$id} = 1;
+            } else {
+                print $infile1 "item,$created,$id\n";
+                print $infile2 "item,$created,$id\n";
+                $ids1->{$id} = 1;
+                $ids2->{$id} = 1;
+            }
+        }
+    }
 } else {
     my $num = $minRecs + rnd($maxRecs - $minRecs);
 
@@ -107,6 +138,8 @@ print $infile1 "initiate\n";
 my $round = 0;
 my $totalUp = 0;
 my $totalDown = 0;
+my $optimalUp = 0;
+my $optimalDown = 0;
 
 while (1) {
     my $msg = <$outfile1>;
@@ -117,10 +150,12 @@ while (1) {
         my ($action, $id) = ($1, $2);
 
         if ($action eq 'need') {
-            die "duplicate insert of $action,$id" if $ids1->{$id};
+            die "duplicate insert of $action,$id" if $ids1->{$id} && $ENV{NODUPS};
+            $optimalDown += 32 if !$ids1->{$id};
             $ids1->{$id} = 1;
         } elsif ($action eq 'have') {
-            die "duplicate insert of $action,$id" if $ids2->{$id};
+            die "duplicate insert of $action,$id" if $ids2->{$id} && $ENV{NODUPS};
+            $optimalUp += 32 if !$ids2->{$id};
             $ids2->{$id} = 1;
         }
 
@@ -167,7 +202,20 @@ for my $id (keys %$ids2) {
     die "$id not in ids1" if !$ids1->{$id};
 }
 
-print "UP: $totalUp bytes, DOWN: $totalDown bytes\n";
+
+sub renderOverhead {
+    my $total = shift;
+    my $optimal = shift;
+
+    return '∞' if $optimal == 0;
+    return sprintf("%.2f%%", ($total / $optimal - 1) * 100);
+}
+
+my $upOverhead = renderOverhead($totalUp, $optimalUp);
+my $downOverhead = renderOverhead($totalDown, $optimalDown);
+
+
+print "UP: $totalUp bytes ($upOverhead overhead), DOWN: $totalDown bytes ($downOverhead overhead)\n";
 
 print "\n-----------OK-----------\n";
 
