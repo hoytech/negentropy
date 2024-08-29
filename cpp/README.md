@@ -112,7 +112,7 @@ On the client-side, create an initial message, and then transmit it to the serve
         std::vector<std::string> have, need;
         std::optional<std::string> newMsg = ne.reconcile(response, have, need);
 
-        // handle have/need
+        // handle have/need (there may be duplicates from previous calls to reconcile())
 
         if (!newMsg) break; // done
         else std::swap(msg, *newMsg);

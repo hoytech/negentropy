@@ -115,12 +115,13 @@ Once the client has looped over all ranges in a server's message and its constru
 
 ### Frame Size Limits
 
-If there are too many differences and/or they are too evenly distributed throughout the range, then message sizes may become unmanageably large. This may be undesirable because the network transport may have message size limitations, and also because large batch sizes inhibit work pipelining, where the synchronised records are processed as additional syncing occurs.
+If there are too many differences and/or they are too evenly distributed throughout the range, then message sizes may become unmanageably large. This might be undesirable if the network transport has message size limitations, meaning you would have to implement some kind of fragmentation system. Furthermore, large batch sizes inhibit work pipelining, where the synchronised records can be processed in parallel with additional reconciliation.
 
-Because of this, implementations may support a *frame size limit* parameter. If configured, all messages created by this instance will be of length equal to or smaller than this number of bytes. After processing each message, any discovered differences will be included in the `have`/`need` arrays on the client.
+Because of this, negentropy implementations may support a *frame size limit* parameter. If configured, all messages created by this instance will be of length equal to or smaller than this number of bytes. After processing each message, any discovered differences will be included in the `have`/`need` arrays on the client.
 
-To implement this, instead of sending all the ranges it has found that need syncing, the instance will send a smaller number of them to stay under the size limit. Any other ranges that were sent are replied to with a single Fingerprint range so that they will be processed in subsequent message rounds. Frame size limits can increase the number of messaging round-trips and bandwidth consumed.
+To implement this, instead of sending all the ranges it has found that need syncing, the instance will send a smaller number of them to stay under the size limit. Any following ranges that were sent are replied to with a single coalesced `Fingerprint` range so that they will be processed in subsequent message rounds. Frame size limits can increase the number of messaging round-trips and bandwidth consumed.
 
+In some circumstances, already processed ranges can be coalesced into the final `Fingerprint` range. This means that these ranges will get re-processed in subsequent reconciliation rounds. As a result, if either of the two sync parties use frame size limits, then discovered differences may be added to the `have`/`need` multiple times. Applications that cannot handle duplicates should track the reported items to avoid processing items multiple times.
 
 ## Definitions
 

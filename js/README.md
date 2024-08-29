@@ -37,7 +37,7 @@ On the client-side, create an initial message, and then transmit it to the serve
         let response = queryServer(msg);
         let [newMsg, have, need] = await ne.reconcile(msg);
         msg = newMsg;
-        // handle have/need
+        // handle have/need (there may be duplicates from previous calls to reconcile())
     }
 
 *  The output `msg`s and the IDs in the `have`/`need` arrays are hex strings, but you can set `ne.wantUint8ArrayOutput = true` if you want `Uint8Array`s instead.
