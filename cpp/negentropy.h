@@ -38,6 +38,7 @@ struct Negentropy {
 
     uint64_t lastTimestampIn = 0;
     uint64_t lastTimestampOut = 0;
+    bool sentFingerprintRange = false;
 
     Negentropy(StorageImpl &storage, uint64_t frameSizeLimit = 0) : storage(storage), frameSizeLimit(frameSizeLimit) {
         if (frameSizeLimit != 0 && frameSizeLimit < 4096) throw negentropy::err("frameSizeLimit too small");
@@ -50,7 +51,7 @@ struct Negentropy {
         std::string output;
         output.push_back(PROTOCOL_VERSION);
 
-        output += splitRange(0, storage.size(), Bound(MAX_U64));
+        output += splitRange(0, storage.size(), Bound(MAX_U64), Fingerprint());
 
         return output;
     }
@@ -77,6 +78,7 @@ struct Negentropy {
   private:
     std::string reconcileAux(std::string_view query, std::vector<std::string> &haveIds, std::vector<std::string> &needIds) {
         lastTimestampIn = lastTimestampOut = 0; // reset for each message
+        sentFingerprintRange = false;
 
         std::string fullOutput;
         fullOutput.push_back(PROTOCOL_VERSION);
@@ -118,7 +120,7 @@ struct Negentropy {
 
                 if (theirFingerprint != ourFingerprint.sv()) {
                     doSkip();
-                    o += splitRange(lower, upper, currBound);
+                    o += splitRange(lower, upper, currBound, ourFingerprint);
                 } else {
                     skip = true;
                 }
@@ -202,22 +204,29 @@ struct Negentropy {
         return fullOutput;
     }
 
-    std::string splitRange(size_t lower, size_t upper, const Bound &upperBound) {
+    std::string splitRange(size_t lower, size_t upper, const Bound &upperBound, const Fingerprint &rangeFingerprint) {
         std::string o;
 
         uint64_t numElems = upper - lower;
         const uint64_t buckets = 16;
 
         if (numElems < buckets * 2) {
-            o += encodeBound(upperBound);
-            o += encodeVarInt(uint64_t(Mode::IdList));
+            if (sentFingerprintRange) {
+                o += encodeBound(upperBound);
+                o += encodeVarInt(uint64_t(Mode::Fingerprint));
+                o += rangeFingerprint.sv();
+            } else {
+                o += encodeBound(upperBound);
+                o += encodeVarInt(uint64_t(Mode::IdList));
 
-            o += encodeVarInt(numElems);
-            storage.iterate(lower, upper, [&](const Item &item, size_t){
-                o += item.getId();
-                return true;
-            });
+                o += encodeVarInt(numElems);
+                storage.iterate(lower, upper, [&](const Item &item, size_t){
+                    o += item.getId();
+                    return true;
+                });
+            }
         } else {
+            sentFingerprintRange = true;
             uint64_t itemsPerBucket = numElems / buckets;
             uint64_t bucketsWithExtra = numElems % buckets;
             auto curr = lower;

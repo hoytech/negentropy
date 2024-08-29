@@ -262,6 +262,7 @@ class Negentropy {
 
         this.lastTimestampIn = 0;
         this.lastTimestampOut = 0;
+        this.sentFingerprintRange = false;
     }
 
     _bound(timestamp, id) {
@@ -275,7 +276,7 @@ class Negentropy {
         let output = new WrappedBuffer();
         output.extend([ PROTOCOL_VERSION ]);
 
-        await this.splitRange(0, this.storage.size(), this._bound(Number.MAX_VALUE), output);
+        await this.splitRange(0, this.storage.size(), this._bound(Number.MAX_VALUE), null, output);
 
         return this._renderOutput(output);
     }
@@ -289,6 +290,7 @@ class Negentropy {
         query = new WrappedBuffer(loadInputBuffer(query));
 
         this.lastTimestampIn = this.lastTimestampOut = 0; // reset for each message
+        this.sentFingerprintRange = false;
 
         let fullOutput = new WrappedBuffer();
         fullOutput.extend([ PROTOCOL_VERSION ]);
@@ -330,7 +332,7 @@ class Negentropy {
 
                 if (compareUint8Array(theirFingerprint, ourFingerprint) !== 0) {
                     doSkip();
-                    await this.splitRange(lower, upper, currBound, o);
+                    await this.splitRange(lower, upper, currBound, ourFingerprint, o);
                 } else {
                     skip = true;
                 }
@@ -414,20 +416,28 @@ class Negentropy {
         return [fullOutput.length === 1 && this.isInitiator ? null : this._renderOutput(fullOutput), haveIds, needIds];
     }
 
-    async splitRange(lower, upper, upperBound, o) {
+    async splitRange(lower, upper, upperBound, rangeFingerprint, o) {
         let numElems = upper - lower;
         let buckets = 16;
 
         if (numElems < buckets * 2) {
-            o.extend(this.encodeBound(upperBound));
-            o.extend(encodeVarInt(Mode.IdList));
+            if (this.sentFingerprintRange) {
+                o.extend(this.encodeBound(upperBound));
+                o.extend(encodeVarInt(Mode.Fingerprint));
+                o.extend(rangeFingerprint);
+            } else {
+                o.extend(this.encodeBound(upperBound));
+                o.extend(encodeVarInt(Mode.IdList));
 
-            o.extend(encodeVarInt(numElems));
-            this.storage.iterate(lower, upper, (item) => {
-                o.extend(item.id);
-                return true;
-            });
+                o.extend(encodeVarInt(numElems));
+                this.storage.iterate(lower, upper, (item) => {
+                    o.extend(item.id);
+                    return true;
+                });
+            }
         } else {
+            this.sentFingerprintRange = true;
+
             let itemsPerBucket = Math.floor(numElems / buckets);
             let bucketsWithExtra = numElems % buckets;
             let curr = lower;
