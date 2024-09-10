@@ -3,7 +3,12 @@
 # Define the root directory of the negentropy project; this absolute path mechanism works across all major os
 NEGENTROPY_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 INCS	= -I$(NEGENTROPY_ROOT) -I/opt/homebrew/include/ -I$(NEGENTROPY_ROOT)/vendor/lmdbxx/include/
-TARGET  = libnegentropy.so
+
+ifeq ($(OS),Windows_NT)
+	TARGET  = negentropy.dll
+else
+	TARGET  = libnegentropy.so
+endif
 
 .PHONY: all clean install-deps precompiled-header shared-lib
 
