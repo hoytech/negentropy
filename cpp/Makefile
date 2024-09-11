@@ -5,7 +5,7 @@ NEGENTROPY_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 INCS	= -I$(NEGENTROPY_ROOT) -I/opt/homebrew/include/ -I$(NEGENTROPY_ROOT)/vendor/lmdbxx/include/
 
 ifeq ($(OS),Windows_NT)
-	TARGET  = negentropy.dll
+	TARGET  = libnegentropy.dll
 else
 	TARGET  = libnegentropy.so
 endif
