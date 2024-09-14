@@ -234,7 +234,7 @@ This section lists the currently-known production applications that use negentro
 
 ## Author
 
-(C) 2023 Doug Hoyte
+(C) 2023-2024 Doug Hoyte and contributors
 
 Protocol specification, reference implementations, and tests are MIT licensed.
 
