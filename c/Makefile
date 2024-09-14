@@ -21,10 +21,10 @@ install-deps:
 
 # Generate 'negentropy.h.gch'
 precompiled-header:
-	g++ -O0 --std=c++20 -Wall -fexceptions -g $(NEGENTROPY_CPP_ROOT)negentropy.h $(INCS)
+	g++ -O3 --std=c++20 -Wall -fexceptions -g $(NEGENTROPY_CPP_ROOT)negentropy.h $(INCS)
 
 shared-lib:
-	g++ -O0 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) $(NEGENTROPY_ROOT)negentropy_wrapper.cpp -lcrypto -lssl -L/opt/homebrew/lib/
+	g++ -O3 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) $(NEGENTROPY_ROOT)negentropy_wrapper.cpp -lcrypto -lssl -L/opt/homebrew/lib/
 
 clean:
 	rm -f $(TARGET) $(NEGENTROPY_CPP_ROOT)/negentropy.h.gch libnegentropy.so
