@@ -1,6 +1,7 @@
 // (C) 2023 Doug Hoyte. MIT license
 
-#pragma once
+#ifndef _NEGENTROPY_H_
+#define _NEGENTROPY_H_
 
 #include <string.h>
 #include <stdint.h>
@@ -15,6 +16,7 @@
 #include <stdexcept>
 #include <optional>
 #include <bit>
+#include <iostream>
 
 #include "negentropy/encoding.h"
 #include "negentropy/types.h"
@@ -50,7 +52,6 @@ struct Negentropy {
 
         std::string output;
         output.push_back(PROTOCOL_VERSION);
-
         output += splitRange(0, storage.size(), Bound(MAX_U64));
 
         return output;
@@ -322,3 +323,5 @@ struct Negentropy {
 
 template<typename T>
 using Negentropy = negentropy::Negentropy<T>;
+
+#endif

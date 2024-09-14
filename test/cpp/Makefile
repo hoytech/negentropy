@@ -2,7 +2,7 @@ W        = -Wall
 OPT      = -g -O2
 STD      = -std=c++20
 CXXFLAGS = $(STD) $(OPT) $(W) -fPIC $(XCXXFLAGS)
-INCS     = -I../../cpp/ -I./hoytech-cpp/ -Ilmdbxx/include/
+INCS     = -I../../cpp/ -I./hoytech-cpp/ -I../cpp/vendor/lmdbxx/include/ #-I/opt/homebrew/include/ -L/opt/homebrew/lib/
 
 DEPS = ../../cpp/negentropy.h ../../cpp/negentropy/* ../../cpp/negentropy/storage/* ../../cpp/negentropy/storage/btree/*
 
