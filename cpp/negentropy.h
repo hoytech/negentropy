@@ -3,6 +3,7 @@
 #pragma once
 
 #include <string.h>
+#include <stdint.h>
 
 #include <string>
 #include <string_view>
