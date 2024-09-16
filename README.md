@@ -195,6 +195,7 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
 | [Go](https://github.com/illuzen/go-negentropy) | Illuzen | Stable | Vector |
 | [C bindings](c/README.md) | DarshanBPatel | Experimental | Same as C++ |
+| [Go](https://github.com/nbd-wtf/go-nostr/nip77/negentropy) | fiatjaf | Experimental, Nostr-specific | Vector |
 
 
 
