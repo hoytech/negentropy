@@ -202,7 +202,11 @@ There is a conformance test-suite available in the `testing` directory.
 
 In order to test a new language you should create a "harness", which is a basic stdio line-based adapter for your implementation. See the [test/cpp/harness.cpp](test/cpp/harness.cpp) and [test/js/harness.js](test/js/harness.js) files for examples. Next, edit the file `test/Utils.pm` and configure how your harness should be invoked.
 
-Harnesses may require some setup before they are usable. For example, to use the C++ harness you must first run `make` within the `test/cpp/` directory.
+Harnesses may require some setup before they are usable. For example, to use the C++ harness you must first run:
+
+    git submodule update --init
+    cd test/cpp/
+    make
 
 In order to run the test-suite, you'll need the perl module [Session::Token](https://metacpan.org/pod/Session::Token) (`libsession-token-perl` Debian/Ubuntu package).
 
