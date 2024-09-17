@@ -7,12 +7,12 @@ INCS	= -I$(NEGENTROPY_ROOT) -I/opt/homebrew/include/ -I$(NEGENTROPY_ROOT)/vendor
 ifeq ($(OS),Windows_NT)
 	TARGET  = libnegentropy.dll
 else
-	TARGET  = libnegentropy.so
+	TARGET  = libnegentropy.a
 endif
 
-.PHONY: all clean install-deps precompiled-header shared-lib
+.PHONY: all clean install-deps precompiled-header build-lib
 
-all: precompiled-header shared-lib
+all: precompiled-header build-lib
 
 #TODO: Need to add compilation flags based on OS
 install-deps:
@@ -22,8 +22,13 @@ install-deps:
 precompiled-header:
 	g++ -O0 --std=c++20 -Wall -fexceptions -g $(NEGENTROPY_ROOT)negentropy.h $(INCS)
 
-shared-lib:
+build-lib:
+ifeq ($(OS),Windows_NT)
 	g++ -O0 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) $(NEGENTROPY_ROOT)negentropy_wrapper.cpp -lcrypto -lssl -L/opt/homebrew/lib/
+else
+	g++ -O0 -g -std=c++20 $(INCS) -c negentropy_wrapper.cpp
+	ar rcs $(TARGET) negentropy_wrapper.o
+endif
 
 clean:
-	rm -f $(TARGET) negentropy.h.gch libnegentropy.so
+	rm -f $(TARGET) negentropy.h.gch *.o
