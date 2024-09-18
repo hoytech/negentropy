@@ -26,7 +26,7 @@ build-lib:
 ifeq ($(OS),Windows_NT)
 	g++ -O0 -g -std=c++20 $(INCS) -shared -fPIC -o $(TARGET) $(NEGENTROPY_ROOT)negentropy_wrapper.cpp -lcrypto -lssl -L/opt/homebrew/lib/
 else
-	g++ -O0 -g -std=c++20 $(INCS) -c negentropy_wrapper.cpp
+	g++ -O0 -g -std=c++20 $(INCS) -fPIC -c negentropy_wrapper.cpp
 	ar rcs $(TARGET) negentropy_wrapper.o
 endif
 
