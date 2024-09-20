@@ -21,6 +21,8 @@ This repo contains the protocol specification, reference implementations, and te
     * [Range](#range)
     * [Message](#message)
 * [Implementations](#implementations)
+* [Misc](#misc)
+    * [Protocol Debugging with fq](#protocol-debugging-with-fq)
 * [Testing](#testing)
 * [Applications](#applications)
 * [Author](#author)
@@ -193,6 +195,16 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [Rust](https://github.com/yukibtc/rust-negentropy) | Yuki Kishimoto | Stable | Vector |
 | [Go](https://github.com/illuzen/go-negentropy) | Illuzen | Stable | Vector |
 | [C bindings](c/README.md) | DarshanBPatel | Experimental | Same as C++ |
+
+
+
+## Misc
+
+### Protocol Debugging with fq
+
+fiatjaf added support to [fq](https://github.com/wader/fq) to inspect and debug negentropy messages (see [example usage](https://github.com/wader/fq/blob/master/doc/formats.md#negentropy)):
+
+![example fq output](docs/fq.png)
 
 
 
