@@ -3,39 +3,42 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/nbd-wtf/go-nostr"
 	"github.com/nbd-wtf/go-nostr/nip77/negentropy"
+	"github.com/nbd-wtf/go-nostr/nip77/negentropy/storage/vector"
 )
 
 func main() {
 	frameSizeLimit, _ := strconv.Atoi(os.Getenv("FRAMESIZELIMIT"))
-	if frameSizeLimit == 0 {
-		frameSizeLimit = math.MaxInt
-	}
 
-	neg := negentropy.NewNegentropy(negentropy.NewVector(), frameSizeLimit)
+	vec := vector.New()
+	neg := negentropy.New(vec, frameSizeLimit)
 
 	have := make([]string, 0, 500)
 	need := make([]string, 0, 500)
 
+	wg := sync.WaitGroup{}
+	wg.Add(2)
 	go func() {
 		for item := range neg.Haves {
 			have = append(have, item)
 		}
+		wg.Done()
 	}()
 	go func() {
 		for item := range neg.HaveNots {
 			need = append(need, item)
 		}
+		wg.Done()
 	}()
 
 	scanner := bufio.NewScanner(os.Stdin)
-	const maxCapacity = 1024 * 1024 // 1MB
+	const maxCapacity = 1024 * 1024 * 16 // 16MB
 	buf := make([]byte, maxCapacity)
 	scanner.Buffer(buf, maxCapacity)
 
@@ -49,32 +52,29 @@ func main() {
 
 		switch items[0] {
 		case "item":
-			if len(items) != 3 {
-				panic("wrong num of fields")
-			}
 			created, err := strconv.ParseUint(items[1], 10, 64)
 			if err != nil {
 				panic(err)
 			}
-			neg.Insert(&nostr.Event{CreatedAt: nostr.Timestamp(created), ID: items[2]})
+			vec.Insert(nostr.Timestamp(created), items[2])
 
 		case "seal":
-			// do nothing
+			vec.Seal()
 
 		case "initiate":
-			q := neg.Initiate()
+			q := neg.Start()
 			if frameSizeLimit != 0 && len(q)/2 > frameSizeLimit {
-				panic("initiate frameSizeLimit exceeded")
+				panic("frameSizeLimit exceeded")
 			}
 			fmt.Printf("msg,%s\n", q)
 
 		case "msg":
 			q, err := neg.Reconcile(items[1])
 			if err != nil {
-				panic(fmt.Sprintf("Reconciliation failed: %v", err))
+				panic(fmt.Sprintf("reconciliation failed: %v", err))
 			}
 			if q == "" {
-				fmt.Println("done")
+				wg.Wait()
 
 				for _, id := range have {
 					fmt.Printf("have,%s\n", id)
@@ -82,6 +82,8 @@ func main() {
 				for _, id := range need {
 					fmt.Printf("need,%s\n", id)
 				}
+
+				fmt.Println("done")
 
 				continue
 			}
