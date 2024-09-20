@@ -2,7 +2,7 @@ module go-nostr-negentropy-harness
 
 go 1.23.0
 
-require github.com/nbd-wtf/go-nostr v0.37.0
+require github.com/nbd-wtf/go-nostr v0.37.1
 
 require (
 	github.com/btcsuite/btcd/btcec/v2 v2.3.4 // indirect
