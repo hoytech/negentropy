@@ -14,6 +14,8 @@ sub harnessTypeToCmd {
         return '../../rust-negentropy/target/debug/harness';
     } elsif ($harnessType eq 'go') {
         return 'go run go/harness.go';
+    } elsif ($harnessType eq 'go-nostr') {
+        return "bash -c 'cd go-nostr && go run .'";
     }
 
     die "unknown harness type: $harnessType";
