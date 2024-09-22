@@ -11,20 +11,15 @@ This repo contains the protocol specification, reference implementations, and te
     * [Data Requirements](#data-requirements)
     * [Setup](#setup)
     * [Bounds](#bounds)
-    * [Fingerprints](#fingerprints)
     * [Alternating Messages](#alternating-messages)
     * [Algorithm](#algorithm)
+    * [Fingerprints](#fingerprints)
     * [Frame Size Limits](#frame-size-limits)
-* [Definitions](#definitions)
-    * [Varint](#varint)
-    * [Bound](#bound)
-    * [Range](#range)
-    * [Message](#message)
 * [Implementations](#implementations)
+* [Applications](#applications)
 * [Misc](#misc)
     * [Protocol Debugging with fq](#protocol-debugging-with-fq)
 * [Testing](#testing)
-* [Applications](#applications)
 * [Author](#author)
 
 <!-- END OF TOC -->
@@ -38,7 +33,7 @@ Suppose two participants on a network each have a set of records that they have 
 
 Negentropy is based on Aljoscha Meyer's work on "Range-Based Set Reconciliation" ([overview](https://github.com/AljoschaMeyer/set-reconciliation) / [paper](https://arxiv.org/abs/2212.13567) / [master's thesis](https://github.com/AljoschaMeyer/master_thesis/blob/main/main.pdf)).
 
-This page is a technical description of the negentropy wire protocol and the various implementations. Read [our article](https://logperiodic.com/rbsr.html) for a comprehensive introduction to range-based set reconciliation.
+This page is a technical description of the negentropy wire protocol and the various implementations. Read [our article](https://logperiodic.com/rbsr.html) for a comprehensive introduction to range-based set reconciliation, and the [Negentropy Protocol V1](docs/negentropy-protocol-v1.md) specification for the low-level wire protocol.
 
 
 ## Protocol
@@ -123,7 +118,6 @@ To implement this, instead of sending all the ranges it has found that need sync
 In some circumstances, already reconciled ranges can be coalesced into the final `Fingerprint` range. This means that these ranges will get re-processed in subsequent reconciliation rounds. As a result, if either of the two sync parties use frame size limits, then discovered differences may be added to the `have`/`need` multiple times. Applications that cannot handle duplicates should track the reported items to avoid processing items multiple times.
 
 
-
 ## Implementations
 
 This section lists all the currently-known negentropy implementations. If you know of a new one, please let us know by [opening an issue](https://github.com/hoytech/negentropy/issues/new).
@@ -197,6 +191,6 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 
 Protocol specification, reference implementations, and tests are MIT licensed.
 
-Negentropy is a [Log Periodic](https://logperiodic.com) project.
+See [our introductory article](https://logperiodic.com/rbsr.html) or the [low-level protocol spec](docs/negentropy-protocol-v1.md) for more information.
 
-See [our article](https://logperiodic.com/rbsr.html) for more information.
+Negentropy is a [Log Periodic](https://logperiodic.com) project.
