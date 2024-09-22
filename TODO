@@ -1,3 +1,5 @@
+get rid of Session::Token dependency for tests
+
 btree
   optimise splitting: should be able to re-use previous range's summary to avoid one traversal
   binary search within a node
