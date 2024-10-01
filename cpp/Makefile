@@ -20,7 +20,7 @@ install-deps:
 
 # Generate 'negentropy.h.gch'
 precompiled-header:
-	g++ -O0 --std=c++20 -Wall -fexceptions -g $(NEGENTROPY_ROOT)negentropy.h $(INCS)
+	g++ -x c++-header -O0 --std=c++20 -Wall -fexceptions -g -o $(NEGENTROPY_ROOT)negentropy.h.gch $(NEGENTROPY_ROOT)negentropy.h $(INCS)
 
 build-lib:
 ifeq ($(OS),Windows_NT)
