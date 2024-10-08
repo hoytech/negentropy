@@ -25,6 +25,8 @@ typedef struct _result_ {
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
 
+EXTERNC const char* get_last_error();
+
 EXTERNC void* storage_new(const char* db_path, const char* name);
 
 EXTERNC void storage_delete(void* storage);

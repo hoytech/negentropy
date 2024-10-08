@@ -9,6 +9,11 @@
 //This is a C-wrapper for the C++ library that helps in integrating negentropy with nim code.
 //TODO: Do error handling by catching exceptions
 
+thread_local std::string lastError;
+EXTERNC const char* get_last_error() {
+    return lastError.c_str();
+}
+
 void printHexString(std::string_view toPrint){
     for (size_t i = 0; i < toPrint.size(); ++i) {
         printf("%0hhx", toPrint[i]);
@@ -18,20 +23,27 @@ void printHexString(std::string_view toPrint){
 
 void* storage_new(const char* db_path, const char* name){
     negentropy::storage::BTreeMem* storage;
-/* 
-    auto env = lmdb::env::create();
-    env.set_max_dbs(64);
-    env.open(db_path, 0);
+    try {
+        /*
+        auto env = lmdb::env::create();
+        env.set_max_dbs(64);
+        env.open(db_path, 0);
 
-    lmdb::dbi btreeDbi;
+        lmdb::dbi btreeDbi;
 
-    {
-        auto txn = lmdb::txn::begin(env);
-        btreeDbi = negentropy::storage::BTreeMem::setupDB(txn, name);
-        txn.commit();
-    } */
+        {
+            auto txn = lmdb::txn::begin(env);
+            btreeDbi = negentropy::storage::BTreeMem::setupDB(txn, name);
+            txn.commit();
+        }
+        */
 
-    storage = new negentropy::storage::BTreeMem();
+        storage = new negentropy::storage::BTreeMem();
+    } catch (const std::exception& e) {
+        lastError = e.what();
+        return nullptr;
+    }
+
     return storage;
 }
 
@@ -60,8 +72,8 @@ void* negentropy_new(void* storage, uint64_t frameSizeLimit){
     try{
         ne = new Negentropy<negentropy::storage::BTreeMem>(*lmdbStorage, frameSizeLimit);
     }catch(negentropy::err e){
-        //TODO: Error handling
-        return NULL;
+        lastError = e.what();
+        return nullptr;
     }
     return ne;
 }
@@ -78,7 +90,7 @@ int negentropy_initiate(void* negentropy, result* result){
         printHexString(std::string_view(*output)); */
     } catch(negentropy::err e){
         //std::cout << "Exception raised in initiate " << e.what() << std::endl;
-        //TODO: Error handling
+        lastError = e.what();
         return -1;
     }
     if (output.size() > 0 ){
@@ -104,13 +116,16 @@ bool storage_insert(void* storage, uint64_t createdAt, buffer* id){
     negentropy::storage::BTreeMem* lmdbStorage;
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
-    
-/*     std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:"; 
+
+/*     std::cout << "inserting entry in storage, createdAt:" << createdAt << ",id:";
     printHexString(data); */
-    
-    //TODO: Error handling. Is it required?
-    //How does out of memory get handled?
-    return lmdbStorage->insert(createdAt, data);
+
+    try {
+        return lmdbStorage->insert(createdAt, data);
+    } catch (const std::exception& e) {
+        lastError = e.what();
+        return false;
+    }
 }
 
 bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
@@ -118,11 +133,15 @@ bool storage_erase(void* storage, uint64_t createdAt, buffer* id){
     lmdbStorage = reinterpret_cast<negentropy::storage::BTreeMem*>(storage);
     std::string_view data(reinterpret_cast< char const* >(id->data), id->len);
 
-/*     std::cout << "erasing entry from storage, createdAt:" << createdAt << ",id:"; 
+/*     std::cout << "erasing entry from storage, createdAt:" << createdAt << ",id:";
     printHexString(data); */
-    
-    //TODO: Error handling
-    return lmdbStorage->erase(createdAt, data);
+
+    try {
+        return lmdbStorage->erase(createdAt, data);
+    } catch (const std::exception& e) {
+        lastError = e.what();
+        return false;
+    }
 }
 
 int reconcile(void* negentropy, buffer* query, result* result){
@@ -136,7 +155,7 @@ int reconcile(void* negentropy, buffer* query, result* result){
     } catch(negentropy::err e){
         //All errors returned are non-recoverable errors.
         //So passing on the error message upwards
-        //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        lastError = e.what();
         result->error = (char*)calloc(strlen(e.what()), sizeof(char));
         strcpy(result->error,e.what());
         return -1;
@@ -154,7 +173,7 @@ int reconcile(void* negentropy, buffer* query, result* result){
 
 void transform(std::vector<std::string> &from_ids, buffer* to_ids)
 {
-   for (int i=0; i < from_ids.size(); i ++){    
+   for (int i=0; i < from_ids.size(); i ++){
     to_ids[i].len = from_ids[i].size();
     to_ids[i].data =  (unsigned char*)from_ids[i].c_str();
    }
@@ -204,7 +223,7 @@ int reconcile_with_ids(void* negentropy, buffer*  query,reconcile_cbk cbk, char*
     free(have_ids);
     free(need_ids);
     return 0;
-}   
+}
 
 void transform_with_alloc(std::vector<std::string> &from_ids, buffer* to_ids)
 {
@@ -239,11 +258,11 @@ int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
 
 
     } catch(negentropy::err e){
-        std::cout << "caught error "<< e.what() << std::endl;
-        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
-        strcpy(result->error,e.what());
+        lastError = e.what();
+        result->error = strdup(e.what());
         return -1;
     }
+
     buffer output = {0,NULL};
     if (out) {
         result->output.len = out.value().size();
@@ -264,7 +283,7 @@ void free_result(result* r){
     if (r->output.len > 0) {
         free((void *) r->output.data);
     }
-    
+
     if (r->have_ids_len > 0){
         for (int i = 0; i < r->have_ids_len; i++) {
             free((void *) r->have_ids[i].data);
@@ -293,7 +312,7 @@ void* subrange_new(void* storage, uint64_t startTimeStamp, uint64_t endTimeStamp
     try {
     subRange = new negentropy::storage::SubRange(*st, negentropy::Bound(startTimeStamp), negentropy::Bound(endTimeStamp));
     } catch (negentropy::err e){
-        //TODO: Error handling
+        lastError = e.what();
         return NULL;
     }
     return subRange;
@@ -324,7 +343,7 @@ void* negentropy_subrange_new(void* subrange, uint64_t frameSizeLimit){
     try{
         ne = new Negentropy<negentropy::storage::SubRange>(*sub_range, frameSizeLimit);
     }catch(negentropy::err e){
-        //TODO: Error handling
+        lastError = e.what();
         return NULL;
     }
     return ne;
@@ -341,7 +360,7 @@ int negentropy_subrange_initiate(void* negentropy, result* result){
 /*         std::cout << "output of initiate is, len:" << output->size() << ", output:";
         printHexString(std::string_view(*output)); */
     } catch(negentropy::err e){
-        //std::cout << "Exception raised in initiate " << e.what() << std::endl;
+        lastError = e.what();
         return -1;
     }
     if (output.size() > 0 ){
@@ -374,7 +393,7 @@ int reconcile_subrange(void* negentropy, buffer* query, result* result){
     } catch(negentropy::err e){
         //All errors returned are non-recoverable errors.
         //So passing on the error message upwards
-        //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
+        lastError = e.what();
         result->error = (char*)calloc(strlen(e.what()), sizeof(char));
         strcpy(result->error,e.what());
         return -1;
@@ -414,7 +433,7 @@ int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result*
 
 
     } catch(negentropy::err e){
-        std::cout << "caught error "<< e.what() << std::endl;
+        lastError = e.what();
         result->error = (char*)calloc(strlen(e.what()), sizeof(char));
         strcpy(result->error,e.what());
         return -1;
@@ -433,4 +452,3 @@ int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result*
     }
     return 0;
 }
-
