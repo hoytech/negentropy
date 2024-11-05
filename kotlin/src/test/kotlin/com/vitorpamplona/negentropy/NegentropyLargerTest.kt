@@ -62,7 +62,7 @@ class NegentropyLargerTest {
         assertEquals("ed3784f35f4029450f498d8c3f6acc61d90c7706f77ca1f4f75240f49aafe919", result.sendIds[index++].toHexString())
         assertEquals("6f8d146c74f5574840e8d82897a757da4b67774eafdd4bc5fdfb3ec6febfccf5", result.sendIds[index++].toHexString())
         assertEquals("5144bfaa00b30f7ce4219af75e452c1389ddf2a626390b3f5c96b9c59e5d9f5b", result.sendIds[index++].toHexString())
-        assertEquals(6, result.needIds.size)
+        assertEquals(6, result.sendIds.size)
 
         // client should ask
         index = 0
