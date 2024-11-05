@@ -1,4 +1,5 @@
-import com.vitorpamplona.negentropy.Negentropy
+package com.vitorpamplona.negentropy
+
 import com.vitorpamplona.negentropy.testutils.StorageAssets
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -23,5 +24,14 @@ class NegentropyBasicTest {
         assertEquals(null, result.msg)
         assertEquals(0, result.needIds.size)
         assertEquals(0, result.sendIds.size)
+    }
+
+    @OptIn(ExperimentalStdlibApi::class)
+    @Test
+    fun testRecomcileSimple() {
+        val ne = Negentropy(StorageAssets.defaultStorage())
+        val result = ne.reconcile("62aabbccddeeff".hexToByteArray())
+
+        assertEquals("61", result.msg?.toHexString())
     }
 }

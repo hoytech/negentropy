@@ -13,4 +13,6 @@ interface IStorage {
     fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit) -> Boolean)
 
     fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int
+
+    fun findTimestamp(it: ByteArray): Long
 }

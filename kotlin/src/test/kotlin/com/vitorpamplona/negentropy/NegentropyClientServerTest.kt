@@ -1,4 +1,5 @@
-import com.vitorpamplona.negentropy.Negentropy
+package com.vitorpamplona.negentropy
+
 import com.vitorpamplona.negentropy.testutils.StorageAssets
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals

@@ -63,6 +63,15 @@ class StorageVector: IStorage {
         }
     }
 
+    override fun findTimestamp(byteArray: ByteArray): Long {
+        for (i in items.indices) {
+            if (items[i].id.contentEquals(byteArray)) {
+                return items[i].timestamp
+            }
+        }
+        return -1
+    }
+
     override fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit) -> Boolean) {
         checkSealed()
         checkBounds(begin, end)

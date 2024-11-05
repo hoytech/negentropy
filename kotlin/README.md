@@ -75,3 +75,6 @@ Run assemble to generate the `.jar` for the library
 perl test.pl kotlin,js
 ```
 
+# Contributors
+
+Vitor Pamplona

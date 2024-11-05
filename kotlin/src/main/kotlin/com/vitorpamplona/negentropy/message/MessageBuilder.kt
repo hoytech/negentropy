@@ -6,6 +6,13 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
     private val builder = ByteArrayBuilder()
     private var lastTimestampOut = lastTimestamp
 
+    fun branch() = MessageBuilder(lastTimestampOut)
+
+    fun merge(builder: MessageBuilder) {
+        lastTimestampOut = builder.lastTimestampOut
+        addByteArray(builder.unwrap())
+    }
+
     fun unwrap() = builder.unwrap()
 
     fun length() = builder.length()

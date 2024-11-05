@@ -37,7 +37,7 @@ class Negentropy(
         val sendIds: List<ByteArray>,
         val needIds: List<ByteArray>
     ) {
-        fun msgToString() = msg?.joinToString(", ") { it.toHexString() }
+        fun msgToString() = msg?.toHexString()
         fun sendsToString() = sendIds.joinToString(", ") { it.toHexString() }
         fun needsToString() = needIds.joinToString(", ") { it.toHexString() }
     }
@@ -64,7 +64,7 @@ class Negentropy(
         var skip = false
 
         while (consumer.hasItemsToConsume()) {
-            val o = MessageBuilder()
+            var lineBuilder = fullOutput.branch()
             val mode = consumer.nextMode()
 
             val lower = prevIndex
@@ -79,10 +79,10 @@ class Negentropy(
                     } else {
                         if (skip) {
                             skip = false
-                            o.addSkip(prevBound)
+                            lineBuilder.addSkip(prevBound)
                         }
                         val list = prepareBounds(lower, upper, mode.nextBound, storage)
-                        o.addBounds(list)
+                        lineBuilder.addBounds(list)
                     }
                 }
 
@@ -107,7 +107,7 @@ class Negentropy(
                     } else {
                         if (skip) {
                             skip = false
-                            o.addSkip(prevBound)
+                            lineBuilder.addSkip(prevBound)
                         }
 
                         val responseIds = mutableListOf<ByteArray>()
@@ -122,19 +122,20 @@ class Negentropy(
                             true
                         }
 
-                        o.addIdList(endBound, responseIds)
+                        lineBuilder.addIdList(endBound, responseIds)
 
-                        fullOutput.addByteArray(o.unwrap())
+                        fullOutput.merge(lineBuilder)
+                        lineBuilder = fullOutput.branch()
                     }
                 }
             }
 
-            if (exceededFrameSizeLimit(fullOutput.length() + o.length())) {
+            if (exceededFrameSizeLimit(fullOutput.length() + lineBuilder.length())) {
                 val remainingFingerprint = FingerprintCalculator.fingerprint(storage, upper, storageSize)
                 fullOutput.addFingerprint(remainingFingerprint)
                 break
             } else {
-                fullOutput.addByteArray(o.unwrap())
+                fullOutput.merge(lineBuilder)
             }
 
             prevIndex = upper
