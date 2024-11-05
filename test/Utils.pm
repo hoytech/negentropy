@@ -17,7 +17,7 @@ sub harnessTypeToCmd {
     } elsif ($harnessType eq 'go-nostr') {
         return "bash -c 'cd go-nostr && go run .'";
     } elsif ($harnessType eq 'kotlin') {
-        return "kotlin -classpath ../kotlin/build/libs/Negentropy-1.0-SNAPSHOT.jar MainKt";
+        return "kotlin -classpath ../kotlin/build/libs/Negentropy-1.0-SNAPSHOT.jar com.vitorpamplona.negentropy.MainKt";
     }
 
     die "unknown harness type: $harnessType";
