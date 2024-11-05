@@ -21,6 +21,8 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
 
     fun addNumber(n: Int) = builder.extend(encodeVarInt(n))
 
+    fun addNumber(n: Long) = builder.extend(encodeVarInt(n))
+
     fun encodeTimestampOut(timestamp: Long): ByteArray {
         if (timestamp == Long.MAX_VALUE) {
             lastTimestampOut = Long.MAX_VALUE
@@ -30,7 +32,7 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
         val temp = timestamp
         val adjustedTimestamp = timestamp - lastTimestampOut
         lastTimestampOut = temp
-        return encodeVarInt(adjustedTimestamp.toInt() + 1)
+        return encodeVarInt(adjustedTimestamp + 1)
     }
 
     fun addTimestamp(timestamp: Long) = builder.extend(encodeTimestampOut(timestamp))

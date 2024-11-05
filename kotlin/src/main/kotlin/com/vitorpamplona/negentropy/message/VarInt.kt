@@ -31,3 +31,23 @@ fun encodeVarInt(n: Int): ByteArray {
         o[it].toByte()
     }
 }
+
+fun encodeVarInt(n: Long): ByteArray {
+    if (n == 0L) return byteArrayOf(0)
+
+    val list = mutableListOf<Long>()
+
+    var number = n
+    while (number != 0L) {
+        list.add(number and 127)
+        number = number ushr 7
+    }
+
+    list.reverse()
+
+    for (i in 0 until list.size - 1) list[i] = list[i] or 128
+
+    return ByteArray(list.size) {
+        list[it].toByte()
+    }
+}
