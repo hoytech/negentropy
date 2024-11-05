@@ -19,10 +19,7 @@ class FingerprintAccumulator {
 
             // must get 4 bytes from butter, convert signed to unsigned int and
             // place it in a bigger variable to allow the if below
-            val pValue = p.getInt(offset).toUInt().toLong()
-            val poValue = po.getInt(offset).toUInt().toLong()
-
-            val next = pValue + currCarry + poValue
+            val next = p.getInt(offset).toUInt().toLong() + currCarry + po.getInt(offset).toUInt().toLong()
 
             p.putInt(offset, (next and 0xFFFFFFFF).toInt())
             currCarry = if (next > 0xFFFFFFFF) 1 else 0

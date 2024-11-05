@@ -15,20 +15,20 @@ fun decodeVarInt(bytes: ByteArray): Long {
 fun encodeVarInt(n: Int): ByteArray {
     if (n == 0) return byteArrayOf(0)
 
-    val o = mutableListOf<Int>()
+    val list = mutableListOf<Int>()
 
     var number = n
     while (number != 0) {
-        o.add(number and 127)
+        list.add(number and 127)
         number = number ushr 7
     }
 
-    o.reverse()
+    list.reverse()
 
-    for (i in 0 until o.size - 1) o[i] = o[i] or 128
+    for (i in 0 until list.size - 1) list[i] = list[i] or 128
 
-    return ByteArray(o.size) {
-        o[it].toByte()
+    return ByteArray(list.size) {
+        list[it].toByte()
     }
 }
 
