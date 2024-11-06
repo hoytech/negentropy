@@ -2,18 +2,44 @@ package com.vitorpamplona.negentropy
 
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageVector
+import java.io.PrintStream
 import java.util.*
+
+val DEBUG = true
+
+fun initDebug(owner: Long) {
+    if (DEBUG) {
+        System.setErr(PrintStream("err$owner.txt"));
+    }
+}
+
+fun debug(owner: Long, message: String) {
+    if (DEBUG) {
+        val time = System.nanoTime()
+        System.err.println("$time,$owner,$message")
+    }
+}
 
 @OptIn(ExperimentalStdlibApi::class)
 fun main() {
-    val frameSizeLimit = System.getenv("FRAMESIZELIMIT")?.toIntOrNull() ?: 0
+    val owner = System.nanoTime()
+
+    initDebug(owner)
+
+    val frameSizeLimitStr = System.getenv("FRAMESIZELIMIT") ?: "0"
+    val frameSizeLimit = frameSizeLimitStr.toLongOrNull() ?: 0
     val scanner = Scanner(System.`in`)
 
     var ne: Negentropy? = null
     val storage = StorageVector()
 
+    debug(owner, "create,$frameSizeLimitStr")
+
     while (scanner.hasNextLine()) {
         val line = scanner.nextLine()
+
+        debug(owner, line)
+
         val items = line.split(",")
 
         when (items[0]) {

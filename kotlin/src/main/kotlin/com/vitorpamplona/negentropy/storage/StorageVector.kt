@@ -74,12 +74,12 @@ class StorageVector: IStorage {
         return -1
     }
 
-    override fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit) -> Boolean) {
+    override fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit, Int) -> Boolean) {
         checkSealed()
         checkBounds(begin, end)
 
         for (i in begin until end) {
-            if (!shouldContinue(items[i])) break
+            if (!shouldContinue(items[i], i)) break
         }
     }
 

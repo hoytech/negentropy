@@ -10,11 +10,14 @@ import com.vitorpamplona.negentropy.storage.StorageUnit
 
 class Negentropy(
     private val storage: IStorage,
-    private val frameSizeLimit: Int = 0
+    val frameSizeLimit: Long = 0
 ) {
     init {
-        require(frameSizeLimit == 0 || frameSizeLimit >= 4096) { "frameSizeLimit too small" }
+        require(frameSizeLimit == 0L || frameSizeLimit >= 4096) { "frameSizeLimit too small" }
     }
+
+    fun insert(timestamp: Long, id: Id) = storage.insert(timestamp, id)
+    fun seal() = storage.seal()
 
     private var isInitiator: Boolean = false
 
@@ -68,7 +71,7 @@ class Negentropy(
             val mode = consumer.nextMode()
 
             val lower = prevIndex
-            val upper = storage.findLowerBound(prevIndex, storageSize, mode.nextBound)
+            var upper = storage.findLowerBound(prevIndex, storageSize, mode.nextBound)
 
             when (mode) {
                 is Mode.Skip -> skip = true
@@ -110,9 +113,10 @@ class Negentropy(
                         val responseIds = mutableListOf<Id>()
                         var endBound = mode.nextBound
 
-                        storage.iterate(lower, upper) { item ->
+                        storage.iterate(lower, upper) { item, index ->
                             if (exceededFrameSizeLimit(fullOutput.length() + (responseIds.size * ID_SIZE))) {
                                 endBound = item
+                                upper = index
                                 return@iterate false
                             }
                             responseIds.add(item.id)
@@ -187,7 +191,7 @@ class Negentropy(
     }
 
     private fun exceededFrameSizeLimit(n: Int): Boolean {
-        return frameSizeLimit != 0 && n > frameSizeLimit - 200
+        return frameSizeLimit != 0L && n > frameSizeLimit - 200L
     }
 
     private fun getMinimalBound(prev: StorageUnit, curr: StorageUnit): StorageUnit {

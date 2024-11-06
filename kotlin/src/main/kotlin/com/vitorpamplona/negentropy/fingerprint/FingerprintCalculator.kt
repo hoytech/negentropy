@@ -6,6 +6,7 @@ import com.vitorpamplona.negentropy.storage.IStorage
 import java.security.MessageDigest
 
 object FingerprintCalculator {
+    @OptIn(ExperimentalStdlibApi::class)
     fun fingerprint(storage: IStorage, begin: Int, end: Int): ByteArray {
         val out = FingerprintAccumulator()
 

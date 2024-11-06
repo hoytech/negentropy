@@ -12,7 +12,7 @@ interface IStorage {
 
     fun <T> map(begin: Int, end: Int, run: (StorageUnit) -> T): List<T>
     fun forEach(begin: Int, end: Int, run: (StorageUnit) -> Unit)
-    fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit) -> Boolean)
+    fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit, Int) -> Boolean)
 
     fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int
 
