@@ -76,7 +76,7 @@ class Negentropy(
             when (mode) {
                 is Mode.Skip -> skip = true
                 is Mode.Fingerprint -> {
-                    val ourFingerprint = FingerprintCalculator.fingerprint(storage, lower, upper)
+                    val ourFingerprint = FingerprintCalculator().fingerprint(storage, lower, upper)
                     if (mode.fingerprint.contentEquals(ourFingerprint)) {
                         skip = true
                     } else {
@@ -132,7 +132,7 @@ class Negentropy(
             }
 
             if (exceededFrameSizeLimit(fullOutput.length() + lineBuilder.length())) {
-                val remainingFingerprint = FingerprintCalculator.fingerprint(storage, upper, storageSize)
+                val remainingFingerprint = FingerprintCalculator().fingerprint(storage, upper, storageSize)
                 fullOutput.addFingerprint(remainingFingerprint)
                 break
             } else {
@@ -174,7 +174,7 @@ class Negentropy(
 
             repeat(buckets) { i ->
                 val bucketSize = itemsPerBucket + if (i < bucketsWithExtra) 1 else 0
-                val ourFingerprint = FingerprintCalculator.fingerprint(storage, curr, curr + bucketSize)
+                val ourFingerprint = FingerprintCalculator().fingerprint(storage, curr, curr + bucketSize)
                 curr += bucketSize
 
                 val nextBound = if (curr == upper) upperBound else {

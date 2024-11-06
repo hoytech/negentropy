@@ -1,11 +1,10 @@
 package com.vitorpamplona.negentropy
 
-import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageVector
 import java.io.PrintStream
 import java.util.*
 
-val DEBUG = true
+val DEBUG = false
 
 fun initDebug(owner: Long) {
     if (DEBUG) {
@@ -46,8 +45,7 @@ fun main() {
             "item" -> {
                 if (items.size != 3) throw Error("too few items")
                 val created = items[1].toLongOrNull() ?: throw Error("Invalid timestamp format")
-                val id = items[2].trim()
-                storage.insert(created, Id(id.hexToByteArray()))
+                storage.insert(created, items[2].trim())
             }
 
             "seal" -> {
@@ -56,31 +54,29 @@ fun main() {
             }
 
             "initiate" -> {
-                ne?.let {
-                    val q = it.initiate()
-                    if (frameSizeLimit > 0 && q.size > frameSizeLimit * 2) throw Error("frameSizeLimit exceeded")
-                    println("msg,${q.toHexString()}")
-                }
+                if (ne == null) throw Error("Negentropy not created")
+                val q = ne.initiate()
+                if (frameSizeLimit > 0 && q.size > frameSizeLimit * 2) throw Error("frameSizeLimit exceeded")
+                println("msg,${q.toHexString()}")
             }
 
             "msg" -> {
+                if (ne == null) throw Error("Negentropy not created")
                 if (items.size < 2) throw Error("Message not provided")
-                val q = items[1]
-                ne?.let {
-                    val result = it.reconcile(q.hexToByteArray())
 
-                    result.sendIds.forEach { id -> println("have,${id.toHexString()}") }
-                    result.needIds.forEach { id -> println("need,${id.toHexString()}") }
+                val result = ne.reconcile(items[1].hexToByteArray())
 
-                    if (frameSizeLimit > 0 && result.msg != null && result.msg.size > frameSizeLimit * 2) throw Error(
-                        "frameSizeLimit exceeded"
-                    )
+                result.sendIds.forEach { id -> println("have,${id.toHexString()}") }
+                result.needIds.forEach { id -> println("need,${id.toHexString()}") }
 
-                    if (result.msg == null) {
-                        println("done")
-                    } else {
-                        println("msg,${result.msg.toHexString()}")
-                    }
+                if (frameSizeLimit > 0 && result.msg != null && result.msg.size > frameSizeLimit * 2) {
+                    throw Error("frameSizeLimit exceeded")
+                }
+
+                if (result.msg == null) {
+                    println("done")
+                } else {
+                    println("msg,${result.msg.toHexString()}")
                 }
             }
 

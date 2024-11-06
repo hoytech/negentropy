@@ -13,7 +13,7 @@ class FingerprintTest {
             insert(1678011277, "eb6b05c2e3b008592ac666594d78ed83e7b9ab30f825b9b08878128f7500008c")
             seal()
 
-            FingerprintCalculator.fingerprint(this, 0, 1).toHexString()
+            FingerprintCalculator().fingerprint(this, 0, 1).toHexString()
         }
 
         assertEquals("6d74e1212fcafc8a81d090f0ffbde8b0", result)
@@ -28,7 +28,7 @@ class FingerprintTest {
 
             seal()
 
-            FingerprintCalculator.fingerprint(this,0, 2).toHexString()
+            FingerprintCalculator().fingerprint(this,0, 2).toHexString()
         }
 
         assertEquals("96b26d110825d4b1805fc56988a3e65d", result)
@@ -45,7 +45,7 @@ class FingerprintTest {
             seal()
         }
 
-        assertEquals("c15ce60f185fd24ae341076caa93daa5", FingerprintCalculator.fingerprint(storage, 0, 3).toHexString())
-        assertEquals("96b26d110825d4b1805fc56988a3e65d", FingerprintCalculator.fingerprint(storage, 0, 2).toHexString())
+        assertEquals("c15ce60f185fd24ae341076caa93daa5", FingerprintCalculator().fingerprint(storage, 0, 3).toHexString())
+        assertEquals("96b26d110825d4b1805fc56988a3e65d", FingerprintCalculator().fingerprint(storage, 0, 2).toHexString())
     }
 }

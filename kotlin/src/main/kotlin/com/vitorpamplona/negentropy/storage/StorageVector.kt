@@ -36,12 +36,11 @@ class StorageVector : IStorage {
         return items.size
     }
 
-    override fun getItem(i: Int): StorageUnit {
+    override fun getItem(index: Int): StorageUnit {
         checkSealed()
-        check(i < items.size) { throw Error("out of range") }
-        return items[i]
+        check(index < items.size) { throw Error("out of range") }
+        return items[index]
     }
-
 
     override fun <T> map(begin: Int, end: Int, run: (StorageUnit) -> T): List<T> {
         checkSealed()
