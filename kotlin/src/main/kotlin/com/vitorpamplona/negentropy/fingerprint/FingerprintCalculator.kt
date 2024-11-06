@@ -7,14 +7,15 @@ import com.vitorpamplona.negentropy.storage.IStorage
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
+import java.util.*
 
 class FingerprintCalculator {
-    private var buf: ByteArray = ByteArray(ID_SIZE)
+    val buf: ByteArray = ByteArray(ID_SIZE)
 
-    private fun add(otherBuf: ByteArray) {
+    private fun add(base: ByteArray, toAdd: ByteArray) {
         var currCarry = 0L
-        val p = ByteBuffer.wrap(buf).order(ByteOrder.LITTLE_ENDIAN)
-        val po = ByteBuffer.wrap(otherBuf).order(ByteOrder.LITTLE_ENDIAN)
+        val p = ByteBuffer.wrap(base).order(ByteOrder.LITTLE_ENDIAN)
+        val po = ByteBuffer.wrap(toAdd).order(ByteOrder.LITTLE_ENDIAN)
 
         for (i in 0 until 8) {
             val offset = i * 4
@@ -28,8 +29,8 @@ class FingerprintCalculator {
         }
     }
 
-    private fun negate() {
-        val p = ByteBuffer.wrap(buf)
+    private fun negate(base: ByteArray) {
+        val p = ByteBuffer.wrap(base)
 
         for (i in 0 until 8) {
             val offset = i * 4
@@ -38,12 +39,15 @@ class FingerprintCalculator {
 
         val one = ByteArray(ID_SIZE)
         one[0] = 1
-        add(one)
+        add(base, one)
     }
 
-    fun fingerprint(storage: IStorage, begin: Int, end: Int): ByteArray {
+    @OptIn(ExperimentalStdlibApi::class)
+    fun run(storage: IStorage, begin: Int, end: Int): ByteArray {
+        Arrays.fill(buf, 0)
+
         storage.forEach(begin, end) { item ->
-            add(item.id.bytes)
+            add(buf, item.id.bytes)
         }
 
         return fingerprint(buf + encodeVarInt(end - begin))

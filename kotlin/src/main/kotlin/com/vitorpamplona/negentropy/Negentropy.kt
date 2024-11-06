@@ -16,6 +16,8 @@ class Negentropy(
         require(frameSizeLimit == 0L || frameSizeLimit >= 4096) { "frameSizeLimit too small" }
     }
 
+    val fingerprint = FingerprintCalculator()
+
     fun insert(timestamp: Long, id: Id) = storage.insert(timestamp, id)
     fun seal() = storage.seal()
 
@@ -51,14 +53,14 @@ class Negentropy(
         val needIds = mutableSetOf<Id>()
         val consumer = MessageConsumer(query)
 
-        val fullOutput = MessageBuilder()
-        fullOutput.addProtocolVersion(PROTOCOL_VERSION)
+        val builder = MessageBuilder()
+        builder.addProtocolVersion(PROTOCOL_VERSION)
 
         val protocolVersion = consumer.decodeProtocolVersion()
 
         if (protocolVersion != PROTOCOL_VERSION) {
             check(!isInitiator) { "unsupported negentropy protocol version requested: ${protocolVersion - 0x60}" }
-            return ReconciliationResult(fullOutput.toByteArray(), emptyList(), emptyList())
+            return ReconciliationResult(builder.toByteArray(), emptyList(), emptyList())
         }
 
         val storageSize = storage.size()
@@ -67,25 +69,23 @@ class Negentropy(
         var skip = false
 
         while (consumer.hasItemsToConsume()) {
-            var lineBuilder = fullOutput.branch()
+            var lineBuilder = builder.branch()
             val mode = consumer.nextMode()
 
-            val lower = prevIndex
-            var upper = storage.findLowerBound(prevIndex, storageSize, mode.nextBound)
+            val lowerIndex = prevIndex
+            var upperIndex = storage.findLowerBound(prevIndex, storageSize, mode.nextBound)
 
             when (mode) {
                 is Mode.Skip -> skip = true
                 is Mode.Fingerprint -> {
-                    val ourFingerprint = FingerprintCalculator().fingerprint(storage, lower, upper)
-                    if (mode.fingerprint.contentEquals(ourFingerprint)) {
+                    if (mode.fingerprint.contentEquals(fingerprint.run(storage, lowerIndex, upperIndex))) {
                         skip = true
                     } else {
                         if (skip) {
                             skip = false
                             lineBuilder.addSkip(prevBound)
                         }
-                        val list = prepareBounds(lower, upper, mode.nextBound, storage)
-                        lineBuilder.addBounds(list)
+                        lineBuilder.addBounds(prepareBounds(lowerIndex, upperIndex, mode.nextBound, storage))
                     }
                 }
 
@@ -95,7 +95,7 @@ class Negentropy(
 
                         skip = true
 
-                        storage.forEach(lower, upper) { item ->
+                        storage.forEach(lowerIndex, upperIndex) { item ->
                             if (!theirElems.contains(item.id)) {
                                 haveIds.add(item.id)
                             } else {
@@ -113,10 +113,10 @@ class Negentropy(
                         val responseIds = mutableListOf<Id>()
                         var endBound = mode.nextBound
 
-                        storage.iterate(lower, upper) { item, index ->
-                            if (exceededFrameSizeLimit(fullOutput.length() + (responseIds.size * ID_SIZE))) {
+                        storage.iterate(lowerIndex, upperIndex) { item, index ->
+                            if (exceededFrameSizeLimit(builder.length() + (responseIds.size * ID_SIZE))) {
                                 endBound = item
-                                upper = index
+                                upperIndex = index
                                 return@iterate false
                             }
                             responseIds.add(item.id)
@@ -125,26 +125,26 @@ class Negentropy(
 
                         lineBuilder.addIdList(endBound, responseIds)
 
-                        fullOutput.merge(lineBuilder)
-                        lineBuilder = fullOutput.branch()
+                        builder.merge(lineBuilder)
+                        lineBuilder = builder.branch()
                     }
                 }
             }
 
-            if (exceededFrameSizeLimit(fullOutput.length() + lineBuilder.length())) {
-                val remainingFingerprint = FingerprintCalculator().fingerprint(storage, upper, storageSize)
-                fullOutput.addFingerprint(remainingFingerprint)
+            if (exceededFrameSizeLimit(builder.length() + lineBuilder.length())) {
+                // if exceeds, attaches the fingerprint and exits.
+                builder.addFingerprint(fingerprint.run(storage, upperIndex, storageSize))
                 break
             } else {
-                fullOutput.merge(lineBuilder)
+                builder.merge(lineBuilder)
             }
 
-            prevIndex = upper
+            prevIndex = upperIndex
             prevBound = mode.nextBound
         }
 
         return ReconciliationResult(
-            if (fullOutput.length() == 1 && isInitiator) null else fullOutput.toByteArray(),
+            if (builder.length() == 1 && isInitiator) null else builder.toByteArray(),
             haveIds.toList(),
             needIds.toList()
         )
@@ -174,7 +174,7 @@ class Negentropy(
 
             repeat(buckets) { i ->
                 val bucketSize = itemsPerBucket + if (i < bucketsWithExtra) 1 else 0
-                val ourFingerprint = FingerprintCalculator().fingerprint(storage, curr, curr + bucketSize)
+                val ourFingerprint = fingerprint.run(storage, curr, curr + bucketSize)
                 curr += bucketSize
 
                 val nextBound = if (curr == upper) upperBound else {

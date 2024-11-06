@@ -6,9 +6,9 @@ import com.vitorpamplona.negentropy.testutils.benchmark
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
-class BenchmarkTest {
+class BenchmarkSimpleTest {
     @Test
-    fun testInitialize() {
+    fun benchmarkInitialize() {
         benchmark("JIT Benchmark") { 1+1 }
 
         val clientDB = storageFrameLimitsClient()
@@ -22,7 +22,7 @@ class BenchmarkTest {
     }
 
     @Test
-    fun testReconcile() {
+    fun benchmarkReconcile() {
         benchmark("JIT Benchmark") { 1+1 }
 
         val clientDB = storageFrameLimitsClient()
@@ -37,6 +37,6 @@ class BenchmarkTest {
         val init = neClient.initiate()
 
         // send to the server.
-        benchmark("Reconcile") { neServer.reconcile(init) }
+        benchmark("Reconcile Simple") { neServer.reconcile(init) }
     }
 }
