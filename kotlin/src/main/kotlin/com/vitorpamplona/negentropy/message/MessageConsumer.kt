@@ -60,13 +60,7 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         return when (mode.toInt()) {
             Mode.Skip.CODE -> Mode.Skip(currBound)
             Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, consumer.readNBytes(FINGERPRINT_SIZE))
-            Mode.IdList.CODE -> {
-                val elems = mutableListOf<Id>()
-                repeat(decodeVarInt().toInt()) {
-                    elems.add(Id(consumer.readNBytes(ID_SIZE)))
-                }
-                Mode.IdList(currBound, elems)
-            }
+            Mode.IdList.CODE -> Mode.IdList(currBound, List(decodeVarInt().toInt()) { Id(consumer.readNBytes(ID_SIZE)) })
 
             else -> {
                 throw Error("message.Mode not found")
