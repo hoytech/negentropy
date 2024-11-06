@@ -40,8 +40,10 @@ class Id : Comparable<Id> {
         if (this === other) return true
         if (javaClass != other?.javaClass) return false
 
-        other as Id
+        return equalsId(other as Id)
+    }
 
+    fun equalsId(other: Id): Boolean {
         // check hashcode first for speed
         if (hashCode != other.hashCode) return false
 

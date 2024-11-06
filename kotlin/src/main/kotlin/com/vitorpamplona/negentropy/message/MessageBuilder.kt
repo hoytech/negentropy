@@ -5,7 +5,7 @@ import com.vitorpamplona.negentropy.storage.StorageUnit
 import java.io.ByteArrayOutputStream
 
 class MessageBuilder(lastTimestamp: Long = 0L) {
-    private val builder = ByteArrayOutputStream()
+    private val builder = ByteArrayOutputStream(256)
     private var lastTimestampOut = lastTimestamp
 
     fun branch() = MessageBuilder(lastTimestampOut)

@@ -10,6 +10,10 @@ import java.security.MessageDigest
 import java.util.*
 
 class FingerprintCalculator {
+    companion object {
+        val ZERO_RANGE_FINGERPRINT = FingerprintCalculator().fingerprint(ByteArray(ID_SIZE) + encodeVarInt(0))
+    }
+
     val buf: ByteArray = ByteArray(ID_SIZE)
 
     private fun add(base: ByteArray, toAdd: ByteArray) {
@@ -42,8 +46,9 @@ class FingerprintCalculator {
         add(base, one)
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     fun run(storage: IStorage, begin: Int, end: Int): ByteArray {
+        if (begin == end) return ZERO_RANGE_FINGERPRINT
+
         Arrays.fill(buf, 0)
 
         storage.forEach(begin, end) { item ->

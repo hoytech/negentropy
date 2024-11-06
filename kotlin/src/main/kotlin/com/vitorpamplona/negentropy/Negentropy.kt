@@ -177,10 +177,10 @@ class Negentropy(
                 val ourFingerprint = fingerprint.run(storage, curr, curr + bucketSize)
                 curr += bucketSize
 
-                val nextBound = if (curr == upper) upperBound else {
-                    val prevItem = storage.getItem(curr - 1)
-                    val currItem = storage.getItem(curr)
-                    getMinimalBound(prevItem, currItem)
+                val nextBound = if (curr == upper) {
+                    upperBound
+                } else {
+                    getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr))
                 }
 
                 result.add(Mode.Fingerprint(nextBound, ourFingerprint))

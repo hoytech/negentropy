@@ -46,6 +46,8 @@ class StorageVector : IStorage {
         checkSealed()
         checkBounds(begin, end)
 
+        if (begin == end) return emptyList()
+
         val list = mutableListOf<T>()
 
         for (i in begin until end) {
@@ -59,6 +61,8 @@ class StorageVector : IStorage {
         checkSealed()
         checkBounds(begin, end)
 
+        if (begin == end) return
+
         for (i in begin until end) {
             run(items[i])
         }
@@ -66,7 +70,7 @@ class StorageVector : IStorage {
 
     override fun findTimestamp(id: Id): Long {
         for (i in items.indices) {
-            if (items[i].id == id) {
+            if (items[i].id.equalsId(id)) {
                 return items[i].timestamp
             }
         }
@@ -77,6 +81,8 @@ class StorageVector : IStorage {
         checkSealed()
         checkBounds(begin, end)
 
+        if (begin == end) return
+
         for (i in begin until end) {
             if (!shouldContinue(items[i], i)) break
         }
@@ -85,6 +91,8 @@ class StorageVector : IStorage {
     override fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int {
         checkSealed()
         checkBounds(begin, end)
+
+        if (begin == end) return begin
 
         return binarySearch(items, begin, end) { itemCompare(it, bound) < 0 }
     }
