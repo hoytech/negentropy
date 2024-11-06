@@ -1,5 +1,6 @@
 package com.vitorpamplona.negentropy.message
 
+import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 
 class MessageBuilder(lastTimestamp: Long = 0L) {
@@ -10,12 +11,23 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
 
     fun merge(builder: MessageBuilder) {
         lastTimestampOut = builder.lastTimestampOut
-        addByteArray(builder.unwrap())
+        addByteArray(builder.toByteArray())
     }
 
-    fun unwrap() = builder.unwrap()
+    fun toByteArray() = builder.unwrap()
 
     fun length() = builder.length()
+
+    fun encodeTimestampOut(timestamp: Long): ByteArray {
+        return if (timestamp == Long.MAX_VALUE) {
+            lastTimestampOut = Long.MAX_VALUE
+            encodeVarInt(0)
+        } else {
+            val adjustedTimestamp = timestamp - lastTimestampOut
+            lastTimestampOut = timestamp
+            encodeVarInt(adjustedTimestamp + 1)
+        }
+    }
 
     fun addByteArray(newBuffer: ByteArray) = builder.extend(newBuffer)
 
@@ -23,24 +35,12 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
 
     fun addNumber(n: Long) = builder.extend(encodeVarInt(n))
 
-    fun encodeTimestampOut(timestamp: Long): ByteArray {
-        if (timestamp == Long.MAX_VALUE) {
-            lastTimestampOut = Long.MAX_VALUE
-            return encodeVarInt(0)
-        }
-
-        val temp = timestamp
-        val adjustedTimestamp = timestamp - lastTimestampOut
-        lastTimestampOut = temp
-        return encodeVarInt(adjustedTimestamp + 1)
-    }
-
     fun addTimestamp(timestamp: Long) = builder.extend(encodeTimestampOut(timestamp))
 
     fun addBound(key: StorageUnit) {
         addTimestamp(key.timestamp)
-        addNumber(key.id.size)
-        addByteArray(key.id)
+        addNumber(key.id.bytes.size)
+        addByteArray(key.id.bytes)
     }
 
     fun addProtocolVersion(version: Byte) = builder.extend(byteArrayOf(version))
@@ -54,18 +54,18 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
 
     fun addSkip(mode: Mode.Skip) = addSkip(mode.nextBound)
 
-    fun addIdList(nextBound: StorageUnit, ids: List<ByteArray>) {
+    fun addIdList(nextBound: StorageUnit, ids: List<Id>) {
         addBound(nextBound)
         addNumber(Mode.IdList.CODE)
         addNumber(ids.size)
         ids.forEach {
-            addByteArray(it)
+            addByteArray(it.bytes)
         }
     }
 
     fun addIdList(mode: Mode.IdList) = addIdList(mode.nextBound, mode.ids)
 
-    fun addFingerprint(fingerprint: ByteArray) = addFingerprint(StorageUnit(Long.MAX_VALUE, ByteArray(0)), fingerprint)
+    fun addFingerprint(fingerprint: ByteArray) = addFingerprint(StorageUnit(Long.MAX_VALUE), fingerprint)
 
     fun addFingerprint(nextBound: StorageUnit, fingerprint: ByteArray) {
         addBound(nextBound)

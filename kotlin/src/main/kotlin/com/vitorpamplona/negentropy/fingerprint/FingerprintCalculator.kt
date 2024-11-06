@@ -10,7 +10,7 @@ object FingerprintCalculator {
         val out = FingerprintAccumulator()
 
         storage.forEach(begin, end) { item ->
-            out.add(item.id)
+            out.add(item.id.bytes)
         }
 
         return fingerprint(out.bytes() + encodeVarInt(end - begin))

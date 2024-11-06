@@ -1,5 +1,6 @@
 package com.vitorpamplona.negentropy.message
 
+import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 
 sealed class Mode(
@@ -17,7 +18,7 @@ sealed class Mode(
         }
     }
 
-    class IdList(nextBound: StorageUnit, val ids: List<ByteArray>) : Mode(nextBound) {
+    class IdList(nextBound: StorageUnit, val ids: List<Id>) : Mode(nextBound) {
         companion object {
             const val CODE = 2
         }

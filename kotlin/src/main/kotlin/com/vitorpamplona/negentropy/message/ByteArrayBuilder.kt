@@ -12,15 +12,9 @@ class ByteArrayBuilder : IByteArrayBuilder {
 
     override fun length() = _raw.size
 
-    override fun unwrap(): ByteArray {
-        return _raw.copyOf()
-    }
+    override fun unwrap() = _raw.copyOf()
 
-    override fun extend(buf: ByteArrayBuilder) {
-        _raw += buf._raw
-    }
+    override fun extend(buf: ByteArrayBuilder) { _raw += buf._raw }
 
-    override fun extend(newBuffer: ByteArray) {
-        _raw += newBuffer
-    }
+    override fun extend(newBuffer: ByteArray) { _raw += newBuffer }
 }

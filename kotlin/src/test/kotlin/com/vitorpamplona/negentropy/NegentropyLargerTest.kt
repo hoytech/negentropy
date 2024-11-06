@@ -1,36 +1,16 @@
 package com.vitorpamplona.negentropy
 
-import com.vitorpamplona.negentropy.storage.IStorage
-import com.vitorpamplona.negentropy.storage.StorageVector
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageClient
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageServer
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
 class NegentropyLargerTest {
     @OptIn(ExperimentalStdlibApi::class)
-    fun load(file: String, db: IStorage) {
-        val input1 = object {}.javaClass.getResourceAsStream(file) ?: error("Cannot open/find the file")
-        input1.bufferedReader().lines().forEach {
-            if (it.contains(",")) {
-                val (timestamp, hex) = it.split(",")
-
-                timestamp.toLongOrNull()?.let {
-                    db.insert(it, hex.hexToByteArray())
-                }
-            }
-        }
-
-        db.seal()
-    }
-
-    fun storageP1() = StorageVector().apply { load("/client.txt", this) }
-
-    fun storageP2() = StorageVector().apply { load("/server.txt", this) }
-
-    @OptIn(ExperimentalStdlibApi::class)
     @Test
     fun testReconcile() {
-        val clientDB = storageP1()
-        val serverDB = storageP2()
+        val clientDB = storageClient()
+        val serverDB = storageServer()
 
         assertEquals(30, clientDB.size())
         assertEquals(30, serverDB.size())
@@ -66,12 +46,13 @@ class NegentropyLargerTest {
 
         // client should ask
         index = 0
-        assertEquals("5650fc157cb1c947b00cee120fd71b6e93dc6dfdb87f092f3d0c52b31d74675c", result.needIds[index++].toHexString())
-        assertEquals("3ada797b897747c1f6a389025bc03aba5c706f22f7bd60e4a2d9dabcfe21c324", result.needIds[index++].toHexString())
-        assertEquals("c820f4c1784abda82e640fc20cbfe0f7f0544da4cfe74d382392d73375d2503d", result.needIds[index++].toHexString())
-        assertEquals("556ea7b8a8e4c8ffadea26e689c7d1fb24e83873e839fa3f94c630ccd5b5567e", result.needIds[index++].toHexString())
-        assertEquals("7d929283afc8830733b84953fcc09a6b7898581cb557aad4e0c0d7382ba7f1a7", result.needIds[index++].toHexString())
         assertEquals("ef3e606c1b9291b7ba1eaa119b431763ae8a41c0da9f60c8df81e6cb85f8fc75", result.needIds[index++].toHexString())
+        assertEquals("3ada797b897747c1f6a389025bc03aba5c706f22f7bd60e4a2d9dabcfe21c324", result.needIds[index++].toHexString())
+        assertEquals("7d929283afc8830733b84953fcc09a6b7898581cb557aad4e0c0d7382ba7f1a7", result.needIds[index++].toHexString())
+        assertEquals("556ea7b8a8e4c8ffadea26e689c7d1fb24e83873e839fa3f94c630ccd5b5567e", result.needIds[index++].toHexString())
+        assertEquals("c820f4c1784abda82e640fc20cbfe0f7f0544da4cfe74d382392d73375d2503d", result.needIds[index++].toHexString())
+        assertEquals("5650fc157cb1c947b00cee120fd71b6e93dc6dfdb87f092f3d0c52b31d74675c", result.needIds[index++].toHexString())
+
         assertEquals(6, result.needIds.size)
 
         result.sendIds.forEach {

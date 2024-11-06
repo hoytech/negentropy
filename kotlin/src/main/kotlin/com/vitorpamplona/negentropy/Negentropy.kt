@@ -5,6 +5,7 @@ import com.vitorpamplona.negentropy.message.MessageBuilder
 import com.vitorpamplona.negentropy.message.MessageConsumer
 import com.vitorpamplona.negentropy.message.Mode
 import com.vitorpamplona.negentropy.storage.IStorage
+import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 
 class Negentropy(
@@ -24,7 +25,7 @@ class Negentropy(
         val output = MessageBuilder()
         output.addProtocolVersion(PROTOCOL_VERSION)
         output.addBounds(prepareBoundsForDB(storage))
-        return output.unwrap()
+        return output.toByteArray()
     }
 
     fun setInitiator() {
@@ -34,18 +35,17 @@ class Negentropy(
     @OptIn(ExperimentalStdlibApi::class)
     class ReconciliationResult(
         val msg: ByteArray?,
-        val sendIds: List<ByteArray>,
-        val needIds: List<ByteArray>
+        val sendIds: List<Id>,
+        val needIds: List<Id>
     ) {
         fun msgToString() = msg?.toHexString()
-        fun sendsToString() = sendIds.joinToString(", ") { it.toHexString() }
-        fun needsToString() = needIds.joinToString(", ") { it.toHexString() }
+        fun sendsToString() = sendIds.joinToString(", ") { it.bytes.toHexString() }
+        fun needsToString() = needIds.joinToString(", ") { it.bytes.toHexString() }
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     fun reconcile(query: ByteArray): ReconciliationResult {
-        val haveIds = mutableSetOf<String>()
-        val needIds = mutableSetOf<String>()
+        val haveIds = mutableSetOf<Id>()
+        val needIds = mutableSetOf<Id>()
         val consumer = MessageConsumer(query)
 
         val fullOutput = MessageBuilder()
@@ -55,11 +55,11 @@ class Negentropy(
 
         if (protocolVersion != PROTOCOL_VERSION) {
             check(!isInitiator) { "unsupported negentropy protocol version requested: ${protocolVersion - 0x60}" }
-            return ReconciliationResult(fullOutput.unwrap(), emptyList(), emptyList())
+            return ReconciliationResult(fullOutput.toByteArray(), emptyList(), emptyList())
         }
 
         val storageSize = storage.size()
-        var prevBound = StorageUnit(0, ByteArray(0))
+        var prevBound = StorageUnit(0)
         var prevIndex = 0
         var skip = false
 
@@ -88,18 +88,15 @@ class Negentropy(
 
                 is Mode.IdList -> {
                     if (isInitiator) {
-                        val theirElems = mode.ids.mapTo(HashSet()) {
-                            it.toHexString()
-                        }
+                        val theirElems = mode.ids.toMutableSet()
 
                         skip = true
 
                         storage.forEach(lower, upper) { item ->
-                            val k = item.id.toHexString()
-                            if (!theirElems.contains(k)) {
-                                haveIds.add(k)
+                            if (!theirElems.contains(item.id)) {
+                                haveIds.add(item.id)
                             } else {
-                                theirElems.remove(k)
+                                theirElems.remove(item.id)
                             }
                         }
 
@@ -110,7 +107,7 @@ class Negentropy(
                             lineBuilder.addSkip(prevBound)
                         }
 
-                        val responseIds = mutableListOf<ByteArray>()
+                        val responseIds = mutableListOf<Id>()
                         var endBound = mode.nextBound
 
                         storage.iterate(lower, upper) { item ->
@@ -143,9 +140,9 @@ class Negentropy(
         }
 
         return ReconciliationResult(
-            if (fullOutput.length() == 1 && isInitiator) null else fullOutput.unwrap(),
-            haveIds.map { it.hexToByteArray() },
-            needIds.map { it.hexToByteArray() }
+            if (fullOutput.length() == 1 && isInitiator) null else fullOutput.toByteArray(),
+            haveIds.toList(),
+            needIds.toList()
         )
     }
 
@@ -153,10 +150,7 @@ class Negentropy(
         return prepareBounds(
             lower = 0,
             upper = storage.size(),
-            upperBound = StorageUnit(
-                Long.MAX_VALUE,
-                ByteArray(0)
-            ),
+            upperBound = StorageUnit(Long.MAX_VALUE),
             storage = storage
         )
     }
@@ -198,18 +192,9 @@ class Negentropy(
 
     private fun getMinimalBound(prev: StorageUnit, curr: StorageUnit): StorageUnit {
         return if (curr.timestamp != prev.timestamp) {
-            StorageUnit(curr.timestamp, ByteArray(0))
+            StorageUnit(curr.timestamp)
         } else {
-            var sharedPrefixBytes = 0
-            val currKey = curr.id
-            val prevKey = prev.id
-
-            for (i in 0 until ID_SIZE) {
-                if (currKey[i] != prevKey[i]) break
-                sharedPrefixBytes++
-            }
-
-            StorageUnit(curr.timestamp, currKey.copyOfRange(0, sharedPrefixBytes + 1))
+            StorageUnit(curr.timestamp, curr.id.sharedPrefix(prev.id))
         }
     }
 }

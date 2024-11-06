@@ -1,7 +1,9 @@
 package com.vitorpamplona.negentropy.storage
 
 interface IStorage {
-    fun insert(timestamp: Long, id: ByteArray)
+    fun insert(timestamp: Long, idHex: String)
+    fun insert(timestamp: Long, id: Id)
+
     fun seal()
     fun unseal()
     fun size(): Int
@@ -14,5 +16,5 @@ interface IStorage {
 
     fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int
 
-    fun findTimestamp(it: ByteArray): Long
+    fun findTimestamp(it: Id): Long
 }

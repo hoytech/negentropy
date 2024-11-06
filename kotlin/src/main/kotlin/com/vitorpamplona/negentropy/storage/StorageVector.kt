@@ -6,9 +6,11 @@ class StorageVector: IStorage {
     private val items = mutableListOf<StorageUnit>()
     private var sealed = false
 
-    override fun insert(timestamp: Long, id: ByteArray) {
+    override fun insert(timestamp: Long, idHex: String) = insert(timestamp, Id(idHex))
+
+    override fun insert(timestamp: Long, id: Id) {
         check(!sealed) { throw Error("already sealed") }
-        check(id.size == ID_SIZE) { throw Error("bad id size for added item") }
+        check(id.bytes.size == ID_SIZE) { throw Error("bad id size for added item") }
 
         items.add(StorageUnit(timestamp, id))
     }
@@ -63,9 +65,9 @@ class StorageVector: IStorage {
         }
     }
 
-    override fun findTimestamp(byteArray: ByteArray): Long {
+    override fun findTimestamp(id: Id): Long {
         for (i in items.indices) {
-            if (items[i].id.contentEquals(byteArray)) {
+            if (items[i].id == id) {
                 return items[i].timestamp
             }
         }
@@ -88,34 +90,17 @@ class StorageVector: IStorage {
         return binarySearch(items, begin, end) { itemCompare(it, bound) < 0 }
     }
 
-    private fun compareByteArrays(a: ByteArray, b: ByteArray): Int {
-        for (i in a.indices) {
-            if (i >= b.size) return 1 // `a` is longer
-            if (a[i] < b[i]) return -1
-            if (a[i] > b[i]) return 1
-        }
-        return when {
-            a.size > b.size -> 1  // `a` is longer
-            a.size < b.size -> -1 // `b` is longer
-            else -> 0            // Both arrays are equal
-        }
-    }
-
     fun itemCompare(a: StorageUnit, b: StorageUnit): Int {
         if (a.timestamp == b.timestamp) {
-            return compareByteArrays(a.id, b.id)
+            return a.id.compareTo(b.id)
         }
 
         return a.timestamp.compareTo(b.timestamp)
     }
 
-    private fun checkSealed() {
-        check(sealed) { throw Error("not sealed") }
-    }
+    private fun checkSealed() = check(sealed) { throw Error("not sealed") }
 
-    private fun checkBounds(begin: Int, end: Int) {
-        check(begin <= end && end <= items.size) { throw Error("bad range") }
-    }
+    private fun checkBounds(begin: Int, end: Int) = check(begin <= end && end <= items.size) { throw Error("bad range") }
 
     private fun binarySearch(arr: List<StorageUnit>, first: Int, last: Int, cmp: (StorageUnit) -> Boolean): Int {
         var low = first

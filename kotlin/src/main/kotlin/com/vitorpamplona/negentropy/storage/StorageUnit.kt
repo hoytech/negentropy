@@ -2,5 +2,5 @@ package com.vitorpamplona.negentropy.storage
 
 class StorageUnit(
     val timestamp: Long,
-    val id: ByteArray,
+    val id: Id = Id(ByteArray(0))
 )

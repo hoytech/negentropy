@@ -11,9 +11,7 @@ class ByteArrayConsumer(buffer: ByteArray? = null) : IByteArrayConsumer {
 
     override fun length() = _raw.size
 
-    override fun getByte(): Byte {
-        return getBytes(1)[0]
-    }
+    override fun getByte() = getBytes(1)[0]
 
     override fun getBytes(n: Int): ByteArray {
         if (length() < n) throw Error("parse ends prematurely")
@@ -25,11 +23,7 @@ class ByteArrayConsumer(buffer: ByteArray? = null) : IByteArrayConsumer {
 
     fun getBytes(until: (Byte) -> Boolean): ByteArray {
         var index = 0
-
-        while (true) {
-            if (until(_raw[index])) break
-            index++
-        }
+        while (!until(_raw[index])) index++
         index++
 
         return getBytes(index)
