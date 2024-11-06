@@ -9,7 +9,7 @@ import com.vitorpamplona.negentropy.ID_SIZE
  *
  * This **assumes** the byte array will never change
  */
-class Id: Comparable<Id> {
+class Id : Comparable<Id> {
     val bytes: ByteArray
     private val hashCode: Int
 

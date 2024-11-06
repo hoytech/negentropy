@@ -57,7 +57,7 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
     fun nextMode(): Mode {
         val currBound = decodeBound()
         val mode = decodeVarInt()
-        return when(mode.toInt()) {
+        return when (mode.toInt()) {
             Mode.Skip.CODE -> Mode.Skip(currBound)
             Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, consumer.readNBytes(FINGERPRINT_SIZE))
             Mode.IdList.CODE -> {
@@ -67,6 +67,7 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
                 }
                 Mode.IdList(currBound, elems)
             }
+
             else -> {
                 throw Error("message.Mode not found")
             }

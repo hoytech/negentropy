@@ -2,7 +2,7 @@ package com.vitorpamplona.negentropy.storage
 
 import com.vitorpamplona.negentropy.ID_SIZE
 
-class StorageVector: IStorage {
+class StorageVector : IStorage {
     private val items = mutableListOf<StorageUnit>()
     private var sealed = false
 
@@ -100,7 +100,8 @@ class StorageVector: IStorage {
 
     private fun checkSealed() = check(sealed) { throw Error("not sealed") }
 
-    private fun checkBounds(begin: Int, end: Int) = check(begin <= end && end <= items.size) { throw Error("bad range") }
+    private fun checkBounds(begin: Int, end: Int) =
+        check(begin <= end && end <= items.size) { throw Error("bad range") }
 
     private fun binarySearch(arr: List<StorageUnit>, first: Int, last: Int, cmp: (StorageUnit) -> Boolean): Int {
         var low = first
