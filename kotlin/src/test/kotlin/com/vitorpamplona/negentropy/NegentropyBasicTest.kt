@@ -28,7 +28,7 @@ class NegentropyBasicTest {
 
     @OptIn(ExperimentalStdlibApi::class)
     @Test
-    fun testRecomcileSimple() {
+    fun testReconcileSimple() {
         val ne = Negentropy(StorageAssets.defaultStorage())
         val result = ne.reconcile("62aabbccddeeff".hexToByteArray())
 

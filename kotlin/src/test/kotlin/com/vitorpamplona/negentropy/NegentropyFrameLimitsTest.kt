@@ -1,16 +1,16 @@
 package com.vitorpamplona.negentropy
 
-import com.vitorpamplona.negentropy.testutils.StorageAssets.storageClientWLimits
-import com.vitorpamplona.negentropy.testutils.StorageAssets.storageServerWLimits
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageFrameLimitsClient
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageFrameLimitsServer
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
-class NegentropyLargerWLimitsTest {
+class NegentropyFrameLimitsTest {
     @OptIn(ExperimentalStdlibApi::class)
     @Test
     fun testReconcile() {
-        val clientDB = storageClientWLimits()
-        val serverDB = storageServerWLimits()
+        val clientDB = storageFrameLimitsClient()
+        val serverDB = storageFrameLimitsServer()
 
         assertEquals(111, clientDB.size())
         assertEquals(147, serverDB.size())

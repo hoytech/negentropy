@@ -30,11 +30,11 @@ object StorageAssets {
         seal()
     }
 
-    fun storageClient() = StorageVector().apply { loadFile("/client.txt", this) }
+    fun storageClient() = StorageVector().apply { loadFile("/simpletest-client.txt", this) }
 
-    fun storageServer() = StorageVector().apply { loadFile("/server.txt", this) }
+    fun storageServer() = StorageVector().apply { loadFile("/simpletest-server.txt", this) }
 
-    fun storageClientWLimits() = StorageVector().apply { loadFile("/clientWLimits.txt", this) }
+    fun storageFrameLimitsClient() = StorageVector().apply { loadFile("/framelimits-client.txt", this) }
 
-    fun storageServerWLimits() = StorageVector().apply { loadFile("/serverWLimits.txt", this) }
+    fun storageFrameLimitsServer() = StorageVector().apply { loadFile("/framelimits-server.txt", this) }
 }

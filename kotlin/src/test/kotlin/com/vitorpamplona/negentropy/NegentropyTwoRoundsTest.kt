@@ -5,7 +5,7 @@ import com.vitorpamplona.negentropy.testutils.StorageAssets.storageServer
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
-class NegentropyLargerTest {
+class NegentropyTwoRoundsTest {
     @OptIn(ExperimentalStdlibApi::class)
     @Test
     fun testReconcile() {

@@ -1,7 +1,7 @@
 package com.vitorpamplona.negentropy
 
-import com.vitorpamplona.negentropy.testutils.StorageAssets.storageClientWLimits
-import com.vitorpamplona.negentropy.testutils.StorageAssets.storageServerWLimits
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageFrameLimitsClient
+import com.vitorpamplona.negentropy.testutils.StorageAssets.storageFrameLimitsServer
 import com.vitorpamplona.negentropy.testutils.benchmark
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -11,8 +11,8 @@ class BenchmarkTest {
     fun testInitialize() {
         benchmark("JIT Benchmark") { 1+1 }
 
-        val clientDB = storageClientWLimits()
-        val serverDB = storageServerWLimits()
+        val clientDB = storageFrameLimitsClient()
+        val serverDB = storageFrameLimitsServer()
 
         assertEquals(111, clientDB.size())
         assertEquals(147, serverDB.size())
@@ -25,8 +25,8 @@ class BenchmarkTest {
     fun testReconcile() {
         benchmark("JIT Benchmark") { 1+1 }
 
-        val clientDB = storageClientWLimits()
-        val serverDB = storageServerWLimits()
+        val clientDB = storageFrameLimitsClient()
+        val serverDB = storageFrameLimitsServer()
 
         assertEquals(111, clientDB.size())
         assertEquals(147, serverDB.size())
