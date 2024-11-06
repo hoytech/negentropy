@@ -39,8 +39,8 @@ class Negentropy(
         val needIds: List<Id>
     ) {
         fun msgToString() = msg?.toHexString()
-        fun sendsToString() = sendIds.joinToString(", ") { it.bytes.toHexString() }
-        fun needsToString() = needIds.joinToString(", ") { it.bytes.toHexString() }
+        fun sendsToString() = sendIds.joinToString(", ") { it.toHexString() }
+        fun needsToString() = needIds.joinToString(", ") { it.toHexString() }
     }
 
     fun reconcile(query: ByteArray): ReconciliationResult {

@@ -34,4 +34,19 @@ class VarIntTest {
         assertEquals(65536, MessageConsumer("848000".hexToByteArray()).decodeVarInt())
         assertEquals(65537, MessageConsumer("848001".hexToByteArray()).decodeVarInt())
     }
+
+    @OptIn(ExperimentalStdlibApi::class)
+    @Test
+    fun testDecodeVarIntByteArray() {
+        assertEquals(0, decodeVarInt("00".hexToByteArray()))
+        assertEquals(1, decodeVarInt("01".hexToByteArray()))
+        assertEquals(2, decodeVarInt("02".hexToByteArray()))
+        assertEquals(127, decodeVarInt("7f".hexToByteArray()))
+        assertEquals(128, decodeVarInt("8100".hexToByteArray()))
+        assertEquals(255, decodeVarInt("817f".hexToByteArray()))
+        assertEquals(256, decodeVarInt("8200".hexToByteArray()))
+        assertEquals(65535, decodeVarInt("83ff7f".hexToByteArray()))
+        assertEquals(65536, decodeVarInt("848000".hexToByteArray()))
+        assertEquals(65537, decodeVarInt("848001".hexToByteArray()))
+    }
 }

@@ -43,8 +43,8 @@ fun main() {
                 ne?.let {
                     val result = it.reconcile(q.hexToByteArray())
 
-                    result.sendIds.forEach { id -> println("have,${id.bytes.toHexString()}") }
-                    result.needIds.forEach { id -> println("need,${id.bytes.toHexString()}") }
+                    result.sendIds.forEach { id -> println("have,${id.toHexString()}") }
+                    result.needIds.forEach { id -> println("need,${id.toHexString()}") }
 
                     if (frameSizeLimit > 0 && result.msg != null && result.msg.size > frameSizeLimit * 2) throw Error(
                         "frameSizeLimit exceeded"

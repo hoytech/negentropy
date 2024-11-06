@@ -91,11 +91,11 @@ class StorageVector: IStorage {
     }
 
     fun itemCompare(a: StorageUnit, b: StorageUnit): Int {
-        if (a.timestamp == b.timestamp) {
-            return a.id.compareTo(b.id)
+        return if (a.timestamp == b.timestamp) {
+            a.id.compareTo(b.id)
+        } else {
+            a.timestamp.compareTo(b.timestamp)
         }
-
-        return a.timestamp.compareTo(b.timestamp)
     }
 
     private fun checkSealed() = check(sealed) { throw Error("not sealed") }

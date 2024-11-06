@@ -11,7 +11,7 @@ import com.vitorpamplona.negentropy.ID_SIZE
  */
 class Id: Comparable<Id> {
     val bytes: ByteArray
-    val hashCode: Int
+    private val hashCode: Int
 
     constructor(byte: ByteArray) {
         this.bytes = byte

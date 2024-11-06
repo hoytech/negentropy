@@ -5,7 +5,6 @@ import com.vitorpamplona.negentropy.ID_SIZE
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 
 class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
     private val consumer = ByteArrayInputStream(buffer)
