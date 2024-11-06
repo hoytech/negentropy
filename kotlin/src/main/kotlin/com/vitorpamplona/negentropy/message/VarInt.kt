@@ -1,6 +1,6 @@
 package com.vitorpamplona.negentropy.message
 
-fun isEndVarInt(byte: Byte) = ((byte.toInt() and 128) == 0)
+fun isEndVarInt(byte: Int) = ((byte and 128) == 0)
 
 fun decodeVarInt(bytes: ByteArray): Long {
     var res = 0L

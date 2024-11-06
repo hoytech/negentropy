@@ -4,14 +4,27 @@ import com.vitorpamplona.negentropy.FINGERPRINT_SIZE
 import com.vitorpamplona.negentropy.ID_SIZE
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 
 class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
-    private val consumer = ByteArrayConsumer(buffer)
+    private val consumer = ByteArrayInputStream(buffer)
     private var lastTimestampIn = lastTimestamp
 
-    fun hasItemsToConsume() = consumer.length() != 0
+    fun hasItemsToConsume() = consumer.available() > 0
 
-    fun decodeVarInt() = decodeVarInt(consumer.getBytes(::isEndVarInt))
+    // faster to copy the function here.
+    fun decodeVarInt(): Long {
+        var res = 0L
+        var currByte: Int
+
+        do {
+            currByte = consumer.read()
+            res = (res shl 7) or (currByte.toLong() and 127)
+        } while (!isEndVarInt(currByte))
+
+        return res
+    }
 
     fun decodeTimestampIn(): Long {
         var timestamp = decodeVarInt()
@@ -29,11 +42,11 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         val timestamp = decodeTimestampIn()
         val len = decodeVarInt().toInt()
         require(len <= ID_SIZE) { "bound key too long" }
-        return StorageUnit(timestamp, Id(consumer.getBytes(len)))
+        return StorageUnit(timestamp, Id(consumer.readNBytes(len)))
     }
 
     fun decodeProtocolVersion(): Byte {
-        val protocolVersion = consumer.getByte()
+        val protocolVersion = consumer.read().toByte()
 
         check(protocolVersion in 0x60..0x6F) { throw java.lang.Error("invalid negentropy protocol version byte $protocolVersion") }
 
@@ -47,11 +60,11 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         val mode = decodeVarInt()
         return when(mode.toInt()) {
             Mode.Skip.CODE -> Mode.Skip(currBound)
-            Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, consumer.getBytes(FINGERPRINT_SIZE))
+            Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, consumer.readNBytes(FINGERPRINT_SIZE))
             Mode.IdList.CODE -> {
                 val elems = mutableListOf<Id>()
                 repeat(decodeVarInt().toInt()) {
-                    elems.add(Id(consumer.getBytes(ID_SIZE)))
+                    elems.add(Id(consumer.readNBytes(ID_SIZE)))
                 }
                 Mode.IdList(currBound, elems)
             }

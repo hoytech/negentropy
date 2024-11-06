@@ -2,9 +2,10 @@ package com.vitorpamplona.negentropy.message
 
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
+import java.io.ByteArrayOutputStream
 
 class MessageBuilder(lastTimestamp: Long = 0L) {
-    private val builder = ByteArrayBuilder()
+    private val builder = ByteArrayOutputStream()
     private var lastTimestampOut = lastTimestamp
 
     fun branch() = MessageBuilder(lastTimestampOut)
@@ -14,9 +15,9 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
         addByteArray(builder.toByteArray())
     }
 
-    fun toByteArray() = builder.unwrap()
+    fun toByteArray() = builder.toByteArray()
 
-    fun length() = builder.length()
+    fun length() = builder.size()
 
     fun encodeTimestampOut(timestamp: Long): ByteArray {
         return if (timestamp == Long.MAX_VALUE) {
@@ -29,13 +30,13 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
         }
     }
 
-    fun addByteArray(newBuffer: ByteArray) = builder.extend(newBuffer)
+    fun addByteArray(newBuffer: ByteArray) = builder.writeBytes(newBuffer)
 
-    fun addNumber(n: Int) = builder.extend(encodeVarInt(n))
+    fun addNumber(n: Int) = builder.writeBytes(encodeVarInt(n))
 
-    fun addNumber(n: Long) = builder.extend(encodeVarInt(n))
+    fun addNumber(n: Long) = builder.writeBytes(encodeVarInt(n))
 
-    fun addTimestamp(timestamp: Long) = builder.extend(encodeTimestampOut(timestamp))
+    fun addTimestamp(timestamp: Long) = builder.writeBytes(encodeTimestampOut(timestamp))
 
     fun addBound(key: StorageUnit) {
         addTimestamp(key.timestamp)
@@ -43,7 +44,7 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
         addByteArray(key.id.bytes)
     }
 
-    fun addProtocolVersion(version: Byte) = builder.extend(byteArrayOf(version))
+    fun addProtocolVersion(version: Byte) = builder.writeBytes(byteArrayOf(version))
 
     // ------
 

@@ -9,6 +9,8 @@ import kotlin.test.assertEquals
 class BenchmarkTest {
     @Test
     fun testInitialize() {
+        benchmark("JIT Benchmark") { 1+1 }
+
         val clientDB = storageClientWLimits()
         val serverDB = storageServerWLimits()
 
@@ -21,6 +23,8 @@ class BenchmarkTest {
 
     @Test
     fun testReconcile() {
+        benchmark("JIT Benchmark") { 1+1 }
+
         val clientDB = storageClientWLimits()
         val serverDB = storageServerWLimits()
 
