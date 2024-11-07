@@ -7,9 +7,10 @@ import com.vitorpamplona.negentropy.message.Mode
 import com.vitorpamplona.negentropy.storage.IStorage
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
+import kotlin.time.measureTimedValue
 
 class Negentropy(
-    private val storage: IStorage,
+    val storage: IStorage,
     val frameSizeLimit: Long = 0
 ) {
     init {
@@ -37,6 +38,8 @@ class Negentropy(
         isInitiator = true
     }
 
+    fun isInitiator() = isInitiator
+
     @OptIn(ExperimentalStdlibApi::class)
     class ReconciliationResult(
         val msg: ByteArray?,
@@ -51,96 +54,72 @@ class Negentropy(
     fun reconcile(query: ByteArray): ReconciliationResult {
         val haveIds = mutableSetOf<Id>()
         val needIds = mutableSetOf<Id>()
+
         val consumer = MessageConsumer(query)
+        val protocolVersion = consumer.decodeProtocolVersion()
 
         val builder = MessageBuilder()
         builder.addProtocolVersion(PROTOCOL_VERSION)
-
-        val protocolVersion = consumer.decodeProtocolVersion()
 
         if (protocolVersion != PROTOCOL_VERSION) {
             check(!isInitiator) { "unsupported negentropy protocol version requested: ${protocolVersion - 0x60}" }
             return ReconciliationResult(builder.toByteArray(), emptyList(), emptyList())
         }
 
-        val storageSize = storage.size()
-        var prevBound = StorageUnit(0)
-        var prevIndex = 0
-        var skip = false
+        var lowerIndex = 0
+        var delaySkipBound: StorageUnit? = null
 
         while (consumer.hasItemsToConsume()) {
-            var lineBuilder = builder.branch()
             val mode = consumer.nextMode()
-
-            val lowerIndex = prevIndex
-            var upperIndex = storage.findLowerBound(prevIndex, storageSize, mode.nextBound)
+            var upperIndex = storage.findNextBoundIndex(lowerIndex, storage.size(), mode.nextBound)
 
             when (mode) {
-                is Mode.Skip -> skip = true
+                is Mode.Skip -> delaySkipBound = mode.nextBound
                 is Mode.Fingerprint -> {
                     if (mode.fingerprint.contentEquals(fingerprint.run(storage, lowerIndex, upperIndex))) {
-                        skip = true
+                        delaySkipBound = mode.nextBound
                     } else {
-                        if (skip) {
-                            skip = false
-                            lineBuilder.addSkip(prevBound)
-                        }
+                        val lineBuilder = builder.branch()
+
+                        delaySkipBound?.let { lineBuilder.addSkip(it); delaySkipBound = null }
+
                         lineBuilder.addBounds(prepareBounds(lowerIndex, upperIndex, mode.nextBound, storage))
+
+                        if (!exceededFrameSizeLimit(builder.length() + lineBuilder.length())) {
+                            builder.merge(lineBuilder)
+                        } else {
+                            // if exceeds, attaches the fingerprint and exits.
+                            builder.addFingerprint(fingerprint.run(storage, upperIndex, storage.size()))
+                            break
+                        }
                     }
                 }
 
                 is Mode.IdList -> {
                     if (isInitiator) {
-                        val theirElems = mode.ids.toMutableSet()
-
-                        skip = true
-
-                        storage.forEach(lowerIndex, upperIndex) { item ->
-                            if (!theirElems.contains(item.id)) {
-                                haveIds.add(item.id)
-                            } else {
-                                theirElems.remove(item.id)
-                            }
-                        }
-
-                        theirElems.forEach { k -> needIds.add(k) }
+                        delaySkipBound = mode.nextBound
+                        reconcileRangeIntoHavesAndNeeds(mode.ids, lowerIndex, upperIndex, haveIds, needIds)
                     } else {
-                        if (skip) {
-                            skip = false
-                            lineBuilder.addSkip(prevBound)
+                        val howManyIdsWillFit = howManyIdsWillFit(builder.length())
+
+                        delaySkipBound?.let { builder.addSkip(it); delaySkipBound = null }
+
+                        val ids = listIdsFromRange(lowerIndex, upperIndex, mode.nextBound, howManyIdsWillFit)
+
+                        upperIndex = lowerIndex + ids.ids.size
+
+                        builder.addIdList(ids)
+
+                        if (exceededFrameSizeLimit(builder.length())) {
+                            // if exceeds, attaches the fingerprint and exits.
+                            builder.addFingerprint(fingerprint.run(storage, upperIndex, storage.size()))
+                            break
                         }
-
-                        val responseIds = mutableListOf<Id>()
-                        var endBound = mode.nextBound
-
-                        storage.iterate(lowerIndex, upperIndex) { item, index ->
-                            if (exceededFrameSizeLimit(builder.length() + (responseIds.size * ID_SIZE))) {
-                                endBound = item
-                                upperIndex = index
-                                return@iterate false
-                            }
-                            responseIds.add(item.id)
-                            true
-                        }
-
-                        lineBuilder.addIdList(endBound, responseIds)
-
-                        builder.merge(lineBuilder)
-                        lineBuilder = builder.branch()
                     }
                 }
             }
 
-            if (exceededFrameSizeLimit(builder.length() + lineBuilder.length())) {
-                // if exceeds, attaches the fingerprint and exits.
-                builder.addFingerprint(fingerprint.run(storage, upperIndex, storageSize))
-                break
-            } else {
-                builder.merge(lineBuilder)
-            }
-
-            prevIndex = upperIndex
-            prevBound = mode.nextBound
+            lowerIndex = upperIndex
         }
 
         return ReconciliationResult(
@@ -148,6 +127,44 @@ class Negentropy(
             haveIds.toList(),
             needIds.toList()
         )
+    }
+
+    private fun listIdsFromRange(lowerIndex: Int, upperIndex: Int, nextBound: StorageUnit, limit: Long): Mode.IdList {
+        val responseIds = mutableListOf<Id>()
+        var resultingNextBound = nextBound
+
+        storage.iterate(lowerIndex, upperIndex) { item, index ->
+            if (responseIds.size > limit) {
+                resultingNextBound = item
+                false
+            } else {
+                responseIds.add(item.id)
+                true
+            }
+        }
+
+        return Mode.IdList(resultingNextBound, responseIds)
+    }
+
+    private fun reconcileRangeIntoHavesAndNeeds(
+        ids: List<Id>,
+        lowerIndex: Int, upperIndex: Int,
+        haves: MutableSet<Id>, needs: MutableSet<Id>
+    ) {
+        if (lowerIndex == upperIndex) {
+            // nothing to filter in the local db
+            needs.addAll(ids)
+        } else {
+            val theirElems = ids.toMutableSet()
+            storage.forEach(lowerIndex, upperIndex) { item ->
+                if (!theirElems.contains(item.id)) {
+                    haves.add(item.id)
+                } else {
+                    theirElems.remove(item.id)
+                }
+            }
+            needs.addAll(theirElems)
+        }
     }
 
     private fun prepareBoundsForDB(storage: IStorage): List<Mode> {
@@ -188,6 +205,13 @@ class Negentropy(
         }
 
         return result
+    }
+
+    private fun howManyIdsWillFit(alreadyUsed: Int): Long {
+        if (frameSizeLimit == 0L) return Long.MAX_VALUE
+        if (alreadyUsed > frameSizeLimit - 200L) return 0 // already passed
+
+        return ((frameSizeLimit - 200) - alreadyUsed) / ID_SIZE
     }
 
     private fun exceededFrameSizeLimit(n: Int): Boolean {

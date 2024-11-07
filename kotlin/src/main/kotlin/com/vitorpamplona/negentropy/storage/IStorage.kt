@@ -10,11 +10,12 @@ interface IStorage {
 
     fun getItem(index: Int): StorageUnit
 
+    fun <T> map(run: (StorageUnit) -> T): List<T>
     fun <T> map(begin: Int, end: Int, run: (StorageUnit) -> T): List<T>
     fun forEach(begin: Int, end: Int, run: (StorageUnit) -> Unit)
     fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit, Int) -> Boolean)
 
-    fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int
+    fun findNextBoundIndex(begin: Int, end: Int, bound: StorageUnit): Int
 
     fun findTimestamp(id: Id): Long
 }

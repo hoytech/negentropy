@@ -42,6 +42,11 @@ class StorageVector : IStorage {
         return items[index]
     }
 
+    override fun <T> map(run: (StorageUnit) -> T): List<T> {
+        checkSealed()
+        return items.map(run)
+    }
+
     override fun <T> map(begin: Int, end: Int, run: (StorageUnit) -> T): List<T> {
         checkSealed()
         checkBounds(begin, end)
@@ -88,7 +93,7 @@ class StorageVector : IStorage {
         }
     }
 
-    override fun findLowerBound(begin: Int, end: Int, bound: StorageUnit): Int {
+    override fun findNextBoundIndex(begin: Int, end: Int, bound: StorageUnit): Int {
         checkSealed()
         checkBounds(begin, end)
 

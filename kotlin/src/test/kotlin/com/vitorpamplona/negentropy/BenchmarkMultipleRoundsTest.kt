@@ -13,7 +13,7 @@ class BenchmarkMultipleRoundsTest {
         val instructions = ip.loadFiles("/multiplerounds-node1.txt", "/multiplerounds-node2.txt")
 
         benchmark("Reconcile 7 Rounds at 60000-byte frame and 100,000 records") {
-            val nodes = mutableMapOf<String, Negentropy>()
+            val nodes = mutableMapOf<String, InstructionParser.Node>()
 
             instructions.forEach {
                 ip.runLine(it, nodes)

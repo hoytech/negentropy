@@ -5,6 +5,12 @@ import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageVector
 
 class InstructionParser {
+    class Node(
+        val negentropy: Negentropy,
+        val haves: MutableList<Id> = mutableListOf(),
+        val needs: MutableList<Id> = mutableListOf(),
+    )
+
     class Instruction(
         val toNode: String,
         val time: Long,
@@ -66,13 +72,14 @@ class InstructionParser {
     }
 
     @OptIn(ExperimentalStdlibApi::class)
-    fun runLine(line: Instruction, nodes: MutableMap<String, Negentropy>): String? {
-        val ne = nodes[line.toNode]
+    fun runLine(line: Instruction, nodes: MutableMap<String, Node>): String? {
+        val node = nodes[line.toNode]
+        val ne = node?.negentropy
         when (val command = line.command) {
             is Command.Create -> {
                 check(!nodes.contains(line.toNode)) { "Node already exist" }
 
-                nodes[line.toNode] = Negentropy(StorageVector(), command.frameSizeLimit)
+                nodes[line.toNode] = Node(Negentropy(StorageVector(), command.frameSizeLimit))
             }
             is Command.Item -> {
                 check(ne != null) { "Negentropy not created for this Node ${line.toNode}" }
@@ -97,6 +104,9 @@ class InstructionParser {
 
                 if (ne.frameSizeLimit > 0 && result.msg != null && result.msg!!.size > ne.frameSizeLimit * 2)
                     throw Error("frameSizeLimit exceeded")
+
+                node.haves.addAll(result.sendIds)
+                node.needs.addAll(result.needIds)
 
                 return if (result.msg == null) {
                     "done"
