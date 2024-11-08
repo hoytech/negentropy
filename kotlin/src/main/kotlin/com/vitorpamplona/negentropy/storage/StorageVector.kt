@@ -1,7 +1,5 @@
 package com.vitorpamplona.negentropy.storage
 
-import com.vitorpamplona.negentropy.ID_SIZE
-
 class StorageVector : IStorage {
     private val items = mutableListOf<StorageUnit>()
     private var sealed = false
@@ -10,13 +8,11 @@ class StorageVector : IStorage {
 
     override fun insert(timestamp: Long, id: Id) {
         check(!sealed) { "already sealed" }
-        check(id.bytes.size == ID_SIZE) { "bad id size for added item" }
 
         items.add(StorageUnit(timestamp, id))
     }
 
     override fun seal() {
-        check(!sealed) { "already sealed" }
         sealed = true
 
         items.sort()
@@ -35,7 +31,6 @@ class StorageVector : IStorage {
 
     override fun getItem(index: Int): StorageUnit {
         checkSealed()
-        check(index < items.size) { "out of range" }
         return items[index]
     }
 
@@ -90,16 +85,16 @@ class StorageVector : IStorage {
         }
     }
 
-    override fun findNextBoundIndex(begin: Int, end: Int, bound: StorageUnit): Int {
+    override fun indexAtOrBeforeBound(bound: Bound, begin: Int, end: Int): Int {
         checkSealed()
         checkBounds(begin, end)
 
         if (begin == end) return begin
 
-        val second = items.binarySearch(bound, begin, end)
+        val second = items.binarySearch(bound.toStorage(), begin, end)
 
         // if the item is not found, it returns negative
-        return if (second < 0) -second -1 else second
+        return if (second < 0) -second - 1 else second
     }
 
     private fun checkSealed() = check(sealed) { "not sealed" }

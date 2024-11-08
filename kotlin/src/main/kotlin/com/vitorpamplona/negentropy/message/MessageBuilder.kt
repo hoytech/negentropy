@@ -1,15 +1,15 @@
 package com.vitorpamplona.negentropy.message
 
-import com.vitorpamplona.negentropy.storage.StorageUnit
+import com.vitorpamplona.negentropy.storage.Bound
 import java.io.ByteArrayOutputStream
 
 /**
  * Stores a skip state that can be shared between builders.
  */
-class SkipDelayer(currentSkipState: StorageUnit? = null) {
+class SkipDelayer(currentSkipState: Bound? = null) {
     private var delaySkipBound = currentSkipState
 
-    fun skip(nextBound: StorageUnit) {
+    fun skip(nextBound: Bound) {
         delaySkipBound = nextBound
     }
 
@@ -69,10 +69,10 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
 
     internal fun addTimestamp(timestamp: Long) = builder.writeBytes(encodeTimestampOut(timestamp))
 
-    internal fun addBound(key: StorageUnit) {
+    internal fun addBound(key: Bound) {
         addTimestamp(key.timestamp)
-        addNumber(key.id.bytes.size)
-        addByteArray(key.id.bytes)
+        addNumber(key.prefix.bytes.size)
+        addByteArray(key.prefix.bytes)
     }
 
     internal fun addSkip(mode: Mode.Skip) {
@@ -94,7 +94,7 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
 
     fun addProtocolVersion(version: Byte) = builder.writeBytes(byteArrayOf(version))
 
-    fun addSkip(nextBound: StorageUnit) = skipper.skip(nextBound)
+    fun addSkip(nextBound: Bound) = skipper.skip(nextBound)
 
     fun addIdList(mode: Mode.IdList) {
         addDelayedSkip()
@@ -108,7 +108,7 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
         addDelayedSkip()
         addBound(mode.nextBound)
         addNumber(Mode.Fingerprint.CODE)
-        addByteArray(mode.fingerprint)
+        addByteArray(mode.fingerprint.bytes)
     }
 
     fun addBounds(list: List<Mode>) {

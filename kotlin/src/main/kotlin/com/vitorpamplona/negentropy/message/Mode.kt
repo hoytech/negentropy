@@ -1,24 +1,25 @@
 package com.vitorpamplona.negentropy.message
 
+import com.vitorpamplona.negentropy.storage.Bound
 import com.vitorpamplona.negentropy.storage.Id
-import com.vitorpamplona.negentropy.storage.StorageUnit
 
 sealed class Mode(
-    val nextBound: StorageUnit,
+    val nextBound: Bound,
 ) {
-    class Skip(nextBound: StorageUnit) : Mode(nextBound) {
+    class Skip(nextBound: Bound) : Mode(nextBound) {
         companion object {
             const val CODE = 0
         }
     }
 
-    class Fingerprint(nextBound: StorageUnit, val fingerprint: ByteArray) : Mode(nextBound) {
+    class Fingerprint(nextBound: Bound, val fingerprint: com.vitorpamplona.negentropy.fingerprint.Fingerprint) :
+        Mode(nextBound) {
         companion object {
             const val CODE = 1
         }
     }
 
-    class IdList(nextBound: StorageUnit, val ids: List<Id>) : Mode(nextBound) {
+    class IdList(nextBound: Bound, val ids: List<Id>) : Mode(nextBound) {
         companion object {
             const val CODE = 2
         }

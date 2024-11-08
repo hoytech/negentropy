@@ -37,10 +37,10 @@ fun encodeVarIntInternal(n: Int): ByteArray {
     }
 
     return ByteArray(list.size) {
-        if (it == list.size-1) {
-            list[list.size-1-it].toByte()
+        if (it == list.size - 1) {
+            list[list.size - 1 - it].toByte()
         } else {
-            (list[list.size-1-it] or 128).toByte()
+            (list[list.size - 1 - it] or 128).toByte()
         }
     }
 }
@@ -60,10 +60,10 @@ fun encodeVarInt(n: Long): ByteArray {
     }
 
     return ByteArray(list.size) {
-        if (it == list.size-1) {
-            list[list.size-1-it].toByte()
+        if (it == list.size - 1) {
+            list[list.size - 1 - it].toByte()
         } else {
-            (list[list.size-1-it] or 128).toByte()
+            (list[list.size - 1 - it] or 128).toByte()
         }
     }
 }

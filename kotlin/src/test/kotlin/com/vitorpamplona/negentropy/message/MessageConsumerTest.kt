@@ -22,6 +22,6 @@ class MessageConsumerTest {
         val bound = operator.decodeBound()
 
         assertEquals(1678011277, bound.timestamp)
-        assertEquals("eb6b05c2e3b008592ac666594d78ed83e7b9ab30f825b9b08878128f7500008c", bound.id.toHexString())
+        assertEquals("eb6b05c2e3b008592ac666594d78ed83e7b9ab30f825b9b08878128f7500008c", bound.prefix.toHexString())
     }
 }

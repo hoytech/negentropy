@@ -15,7 +15,7 @@ interface IStorage {
     fun forEach(begin: Int, end: Int, run: (StorageUnit) -> Unit)
     fun iterate(begin: Int, end: Int, shouldContinue: (StorageUnit, Int) -> Boolean)
 
-    fun findNextBoundIndex(begin: Int, end: Int, bound: StorageUnit): Int
+    fun indexAtOrBeforeBound(bound: Bound, begin: Int, end: Int): Int
 
     fun findTimestamp(id: Id): Long
 }

@@ -1,9 +1,9 @@
 package com.vitorpamplona.negentropy.fingerprint
 
-import com.vitorpamplona.negentropy.FINGERPRINT_SIZE
-import com.vitorpamplona.negentropy.ID_SIZE
+import com.vitorpamplona.negentropy.fingerprint.Fingerprint.Companion.SIZE
 import com.vitorpamplona.negentropy.message.encodeVarInt
 import com.vitorpamplona.negentropy.storage.IStorage
+import com.vitorpamplona.negentropy.storage.Id
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
@@ -11,10 +11,11 @@ import java.util.*
 
 class FingerprintCalculator {
     companion object {
-        val ZERO_RANGE_FINGERPRINT = FingerprintCalculator().fingerprint(ByteArray(ID_SIZE) + encodeVarInt(0))
+        // cached common result
+        val ZERO_RANGE_FINGERPRINT = FingerprintCalculator().fingerprint(ByteArray(Id.SIZE) + encodeVarInt(0))
     }
 
-    val buf: ByteArray = ByteArray(ID_SIZE)
+    private val buf: ByteArray = ByteArray(Id.SIZE)
 
     private fun add(base: ByteArray, toAdd: ByteArray) {
         var currCarry = 0L
@@ -33,7 +34,7 @@ class FingerprintCalculator {
         }
     }
 
-    fun run(storage: IStorage, begin: Int, end: Int): ByteArray {
+    fun run(storage: IStorage, begin: Int, end: Int): Fingerprint {
         if (begin == end) return ZERO_RANGE_FINGERPRINT
 
         Arrays.fill(buf, 0)
@@ -45,7 +46,7 @@ class FingerprintCalculator {
         return fingerprint(buf + encodeVarInt(end - begin))
     }
 
-    private fun fingerprint(bytes: ByteArray) = sha256(bytes).copyOfRange(0, FINGERPRINT_SIZE)
+    private fun fingerprint(bytes: ByteArray) = Fingerprint(sha256(bytes).copyOfRange(0, SIZE))
 
     private fun sha256(slice: ByteArray) = MessageDigest.getInstance("SHA-256").digest(slice)
 }

@@ -1,9 +1,9 @@
 package com.vitorpamplona.negentropy.message
 
-import com.vitorpamplona.negentropy.FINGERPRINT_SIZE
-import com.vitorpamplona.negentropy.ID_SIZE
+import com.vitorpamplona.negentropy.fingerprint.Fingerprint
+import com.vitorpamplona.negentropy.storage.Bound
+import com.vitorpamplona.negentropy.storage.HashedByteArray
 import com.vitorpamplona.negentropy.storage.Id
-import com.vitorpamplona.negentropy.storage.StorageUnit
 import java.io.ByteArrayInputStream
 
 class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
@@ -40,11 +40,10 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         return deltaTimestamp
     }
 
-    internal fun decodeBound(): StorageUnit {
+    internal fun decodeBound(): Bound {
         val timestamp = decodeTimestampIn()
         val len = decodeVarInt().toInt()
-        require(len <= ID_SIZE) { "bound key too long" }
-        return StorageUnit(timestamp, Id(consumer.readNBytes(len)))
+        return Bound(timestamp, HashedByteArray(consumer.readNBytes(len)))
     }
 
     fun decodeProtocolVersion(): Byte {
@@ -62,8 +61,10 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         val mode = decodeVarInt()
         return when (mode.toInt()) {
             Mode.Skip.CODE -> Mode.Skip(currBound)
-            Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, consumer.readNBytes(FINGERPRINT_SIZE))
-            Mode.IdList.CODE -> Mode.IdList(currBound, List(decodeVarInt().toInt()) { Id(consumer.readNBytes(ID_SIZE)) })
+            Mode.Fingerprint.CODE -> Mode.Fingerprint(currBound, Fingerprint(consumer.readNBytes(Fingerprint.SIZE)))
+            Mode.IdList.CODE -> Mode.IdList(
+                currBound,
+                List(decodeVarInt().toInt()) { Id(consumer.readNBytes(Id.SIZE)) })
 
             else -> {
                 throw Error("message.Mode not found")

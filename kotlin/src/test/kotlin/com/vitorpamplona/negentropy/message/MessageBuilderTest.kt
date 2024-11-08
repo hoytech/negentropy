@@ -1,7 +1,7 @@
 package com.vitorpamplona.negentropy.message
 
-import com.vitorpamplona.negentropy.storage.Id
-import com.vitorpamplona.negentropy.storage.StorageUnit
+import com.vitorpamplona.negentropy.storage.Bound
+import com.vitorpamplona.negentropy.storage.HashedByteArray
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
 
@@ -20,7 +20,7 @@ class MessageBuilderTest {
     @OptIn(ExperimentalStdlibApi::class)
     @Test
     fun testBoundEncoder() {
-        val test = StorageUnit(1678011277, Id("eb6b05c2e3b008592ac666594d78ed83e7b9ab30f825b9b08878128f7500008c"))
+        val test = Bound(1678011277, HashedByteArray("eb6b05c2e3b008592ac666594d78ed83e7b9ab30f825b9b08878128f7500008c"))
         val operator = MessageBuilder()
         operator.addBound(test)
 
