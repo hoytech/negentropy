@@ -14,9 +14,8 @@ class ComparatorTest {
         assertEquals(1, st.itemCompare(StorageUnit(2), StorageUnit(1)))
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     @Test
-    fun testComparatorWithArray() {
+    fun testComparatorByteArray() {
         val st = StorageVector()
 
         assertEquals(0,  st.itemCompare(StorageUnit(0, Id("0000")), StorageUnit(0, Id("0000"))))
@@ -24,5 +23,12 @@ class ComparatorTest {
         assertEquals(1,  st.itemCompare(StorageUnit(0, Id("0100")), StorageUnit(0, Id("0000"))))
         assertEquals(-1, st.itemCompare(StorageUnit(0, Id("1111")), StorageUnit(0, Id("111100"))))
         assertEquals(1,  st.itemCompare(StorageUnit(0, Id("111100")), StorageUnit(0, Id("1111"))))
+    }
+
+    @Test
+    fun testComparatorUbyteIssue() {
+        val st = StorageVector()
+
+        assertEquals(-1,  st.itemCompare(StorageUnit(0, Id("9075")), StorageUnit(0, Id("90e2"))))
     }
 }
