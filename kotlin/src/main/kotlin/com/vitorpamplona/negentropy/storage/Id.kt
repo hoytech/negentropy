@@ -56,6 +56,20 @@ class Id : Comparable<Id> {
     override fun compareTo(other: Id): Int {
         for (i in bytes.indices) {
             if (i >= other.bytes.size) return 1 // `a` is longer
+
+            if (bytes[i] == other.bytes[i]) continue
+
+            // avoids conversion to unsigned byte
+            if (bytes[i] < 0 && other.bytes[i] < 0) {
+                if (bytes[i] < other.bytes[i]) return -1
+                if (bytes[i] > other.bytes[i]) return 1
+            }
+
+            if (bytes[i] < 0) return 1 // other.bytes[i] is negative
+
+            if (other.bytes[i] < 0) return -1 // bytes[i] is negative
+
+            // both are negative
             if (bytes[i] < other.bytes[i]) return -1
             if (bytes[i] > other.bytes[i]) return 1
         }
