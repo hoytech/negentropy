@@ -15,6 +15,7 @@ class StorageVector : IStorage {
         items.add(StorageUnit(timestamp, id))
     }
 
+    @OptIn(ExperimentalStdlibApi::class)
     override fun seal() {
         check(!sealed) { throw Error("already sealed") }
         sealed = true
@@ -32,7 +33,6 @@ class StorageVector : IStorage {
     }
 
     override fun size(): Int {
-        checkSealed()
         return items.size
     }
 
