@@ -1,11 +1,13 @@
 package com.vitorpamplona.negentropy.message
 
-import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 import java.io.ByteArrayOutputStream
 
-class SkipDelayer {
-    private var delaySkipBound: StorageUnit? = null
+/**
+ * Stores a skip state that can be shared between builders.
+ */
+class SkipDelayer(currentSkipState: StorageUnit? = null) {
+    private var delaySkipBound = currentSkipState
 
     fun skip(nextBound: StorageUnit) {
         delaySkipBound = nextBound
@@ -13,7 +15,7 @@ class SkipDelayer {
 
     fun addSkip(builder: MessageBuilder) {
         delaySkipBound?.let {
-            builder.addSkip(it)
+            builder.addSkip(Mode.Skip(it))
             delaySkipBound = null
         }
     }
@@ -21,8 +23,18 @@ class SkipDelayer {
 
 class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDelayer()) {
     private val builder = ByteArrayOutputStream(256)
+
+    // all timestamps in a Negentropy messages are deltas from the previous one
+    // the first timestamp is a unit timestamp
     private var lastTimestampOut = lastTimestamp
+
+    // modes can be skipped in sequence. Instead of skipping them immediately
+    // stores a state and only skips the last one.
     private var skipper = skipStarter
+
+    // ---------------------
+    // Branching and Merging
+    // ---------------------
 
     // Branches a new builder while keeping the same timeout and skip status
     fun branch() = MessageBuilder(lastTimestampOut, skipper)
@@ -34,11 +46,11 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
         addByteArray(builder.toByteArray())
     }
 
-    fun toByteArray() = builder.toByteArray()
+    // -----------------
+    // Utility functions
+    // -----------------
 
-    fun length() = builder.size()
-
-    fun encodeTimestampOut(timestamp: Long): ByteArray {
+    internal fun encodeTimestampOut(timestamp: Long): ByteArray {
         return if (timestamp == Long.MAX_VALUE) {
             lastTimestampOut = Long.MAX_VALUE
             encodeVarInt(0)
@@ -49,53 +61,55 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
         }
     }
 
-    fun addByteArray(newBuffer: ByteArray) = builder.writeBytes(newBuffer)
+    internal fun addByteArray(newBuffer: ByteArray) = builder.writeBytes(newBuffer)
 
-    fun addNumber(n: Int) = builder.writeBytes(encodeVarInt(n))
+    internal fun addNumber(n: Int) = builder.writeBytes(encodeVarInt(n))
 
-    fun addNumber(n: Long) = builder.writeBytes(encodeVarInt(n))
+    internal fun addNumber(n: Long) = builder.writeBytes(encodeVarInt(n))
 
-    fun addTimestamp(timestamp: Long) = builder.writeBytes(encodeTimestampOut(timestamp))
+    internal fun addTimestamp(timestamp: Long) = builder.writeBytes(encodeTimestampOut(timestamp))
 
-    fun addBound(key: StorageUnit) {
+    internal fun addBound(key: StorageUnit) {
         addTimestamp(key.timestamp)
         addNumber(key.id.bytes.size)
         addByteArray(key.id.bytes)
     }
 
-    fun addProtocolVersion(version: Byte) = builder.writeBytes(byteArrayOf(version))
-
-    // ------
-
-    fun addSkip(prevBound: StorageUnit) {
-        addBound(prevBound)
+    internal fun addSkip(mode: Mode.Skip) {
+        addBound(mode.nextBound)
         addNumber(Mode.Skip.CODE)
     }
 
-    fun addSkip(mode: Mode.Skip) = addSkip(mode.nextBound)
+    private fun addDelayedSkip() {
+        skipper.addSkip(this)
+    }
 
-    fun addIdList(nextBound: StorageUnit, ids: List<Id>) {
+    // ---------------------
+    // Public functions
+    // ---------------------
+
+    fun toByteArray(): ByteArray = builder.toByteArray()
+
+    fun length() = builder.size()
+
+    fun addProtocolVersion(version: Byte) = builder.writeBytes(byteArrayOf(version))
+
+    fun addSkip(nextBound: StorageUnit) = skipper.skip(nextBound)
+
+    fun addIdList(mode: Mode.IdList) {
         addDelayedSkip()
-        addBound(nextBound)
+        addBound(mode.nextBound)
         addNumber(Mode.IdList.CODE)
-        addNumber(ids.size)
-        ids.forEach {
-            addByteArray(it.bytes)
-        }
+        addNumber(mode.ids.size)
+        mode.ids.forEach { addByteArray(it.bytes) }
     }
 
-    fun addIdList(mode: Mode.IdList) = addIdList(mode.nextBound, mode.ids)
-
-    fun addFingerprint(fingerprint: ByteArray) = addFingerprint(StorageUnit(Long.MAX_VALUE), fingerprint)
-
-    fun addFingerprint(nextBound: StorageUnit, fingerprint: ByteArray) {
+    fun addFingerprint(mode: Mode.Fingerprint) {
         addDelayedSkip()
-        addBound(nextBound)
+        addBound(mode.nextBound)
         addNumber(Mode.Fingerprint.CODE)
-        addByteArray(fingerprint)
+        addByteArray(mode.fingerprint)
     }
-
-    fun addFingerprint(mode: Mode.Fingerprint) = addFingerprint(mode.nextBound, mode.fingerprint)
 
     fun addBounds(list: List<Mode>) {
         list.forEach {
@@ -105,14 +119,6 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
                 is Mode.Skip -> addSkip(it)
             }
         }
-    }
-
-    fun addDelayedSkip() {
-        skipper.addSkip(this)
-    }
-
-    fun delaySkip(nextBound: StorageUnit) {
-        skipper.skip(nextBound)
     }
 }
 

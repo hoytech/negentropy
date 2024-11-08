@@ -8,12 +8,15 @@ import java.io.ByteArrayInputStream
 
 class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
     private val consumer = ByteArrayInputStream(buffer)
+
+    // all timestamps in a Negentropy messages are deltas from the previous one
+    // the first timestamp is a unit timestamp
     private var lastTimestampIn = lastTimestamp
 
     fun hasItemsToConsume() = consumer.available() > 0
 
     // faster to copy the function here.
-    fun decodeVarInt(): Long {
+    internal fun decodeVarInt(): Long {
         var res = 0L
         var currByte: Int
 
@@ -25,19 +28,19 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
         return res
     }
 
-    fun decodeTimestampIn(): Long {
-        var timestamp = decodeVarInt()
-        timestamp = if (timestamp == 0L) Long.MAX_VALUE else timestamp - 1
-        if (lastTimestampIn == Long.MAX_VALUE || timestamp == Long.MAX_VALUE) {
+    internal fun decodeTimestampIn(): Long {
+        var deltaTimestamp = decodeVarInt()
+        deltaTimestamp = if (deltaTimestamp == 0L) Long.MAX_VALUE else deltaTimestamp - 1
+        if (lastTimestampIn == Long.MAX_VALUE || deltaTimestamp == Long.MAX_VALUE) {
             lastTimestampIn = Long.MAX_VALUE
             return Long.MAX_VALUE
         }
-        timestamp += lastTimestampIn
-        lastTimestampIn = timestamp
-        return timestamp
+        deltaTimestamp += lastTimestampIn
+        lastTimestampIn = deltaTimestamp
+        return deltaTimestamp
     }
 
-    fun decodeBound(): StorageUnit {
+    internal fun decodeBound(): StorageUnit {
         val timestamp = decodeTimestampIn()
         val len = decodeVarInt().toInt()
         require(len <= ID_SIZE) { "bound key too long" }
@@ -47,7 +50,7 @@ class MessageConsumer(buffer: ByteArray? = null, lastTimestamp: Long = 0) {
     fun decodeProtocolVersion(): Byte {
         val protocolVersion = consumer.read().toByte()
 
-        check(protocolVersion in 0x60..0x6F) { throw java.lang.Error("invalid negentropy protocol version byte $protocolVersion") }
+        check(protocolVersion in 0x60..0x6F) { "invalid negentropy protocol version byte $protocolVersion" }
 
         return protocolVersion
     }

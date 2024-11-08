@@ -33,19 +33,6 @@ class FingerprintCalculator {
         }
     }
 
-    private fun negate(base: ByteArray) {
-        val p = ByteBuffer.wrap(base)
-
-        for (i in 0 until 8) {
-            val offset = i * 4
-            p.putInt(offset, p.getInt(offset).inv())
-        }
-
-        val one = ByteArray(ID_SIZE)
-        one[0] = 1
-        add(base, one)
-    }
-
     fun run(storage: IStorage, begin: Int, end: Int): ByteArray {
         if (begin == end) return ZERO_RANGE_FINGERPRINT
 

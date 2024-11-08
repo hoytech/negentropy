@@ -16,7 +16,7 @@ class Negentropy(
         require(frameSizeLimit == 0L || frameSizeLimit >= 4096) { "frameSizeLimit too small" }
     }
 
-    val fingerprint = FingerprintCalculator()
+    private val fingerprint = FingerprintCalculator()
 
     fun insert(timestamp: Long, id: Id) = storage.insert(timestamp, id)
     fun seal() = storage.seal()
@@ -31,10 +31,6 @@ class Negentropy(
         output.addProtocolVersion(PROTOCOL_VERSION)
         output.addBounds(prepareBoundsForDB(storage))
         return output.toByteArray()
-    }
-
-    fun setInitiator() {
-        isInitiator = true
     }
 
     fun isInitiator() = isInitiator
@@ -72,10 +68,10 @@ class Negentropy(
             var upperIndex = storage.findNextBoundIndex(lowerIndex, storage.size(), mode.nextBound)
 
             when (mode) {
-                is Mode.Skip -> builder.delaySkip(mode.nextBound)
+                is Mode.Skip -> builder.addSkip(mode.nextBound)
                 is Mode.Fingerprint -> {
                     if (mode.fingerprint.contentEquals(fingerprint.run(storage, lowerIndex, upperIndex))) {
-                        builder.delaySkip(mode.nextBound)
+                        builder.addSkip(mode.nextBound)
                     } else {
                         val lineBuilder = builder.branch()
 
@@ -85,7 +81,7 @@ class Negentropy(
                             builder.merge(lineBuilder)
                         } else {
                             // if exceeds, attaches the fingerprint and exits.
-                            builder.addFingerprint(fingerprint.run(storage, upperIndex, storage.size()))
+                            builder.addFingerprint(Mode.Fingerprint(StorageUnit(Long.MAX_VALUE), fingerprint.run(storage, upperIndex, storage.size())))
                             break
                         }
                     }
@@ -93,12 +89,12 @@ class Negentropy(
 
                 is Mode.IdList -> {
                     if (isInitiator) {
-                        builder.delaySkip(mode.nextBound)
+                        builder.addSkip(mode.nextBound)
                         reconcileRangeIntoHavesAndNeeds(mode.ids, lowerIndex, upperIndex, haveIds, needIds)
                     } else {
                         val howManyIdsWillFit = howManyIdsWillFit(builder.length())
 
-                        val ids = listIdsFromRange(lowerIndex, upperIndex, mode.nextBound, howManyIdsWillFit)
+                        val ids = listIdsInRange(lowerIndex, upperIndex, mode.nextBound, howManyIdsWillFit)
 
                         upperIndex = lowerIndex + ids.ids.size
 
@@ -106,7 +102,7 @@ class Negentropy(
 
                         if (exceededFrameSizeLimit(builder.length())) {
                             // if exceeds, attaches the fingerprint and exits.
-                            builder.addFingerprint(fingerprint.run(storage, upperIndex, storage.size()))
+                            builder.addFingerprint(Mode.Fingerprint(StorageUnit(Long.MAX_VALUE), fingerprint.run(storage, upperIndex, storage.size())))
                             break
                         }
                     }
@@ -123,9 +119,9 @@ class Negentropy(
         )
     }
 
-    private fun listIdsFromRange(lowerIndex: Int, upperIndex: Int, nextBound: StorageUnit, limit: Long): Mode.IdList {
+    private fun listIdsInRange(lowerIndex: Int, upperIndex: Int, startingNextBound: StorageUnit, limit: Long): Mode.IdList {
         val responseIds = mutableListOf<Id>()
-        var resultingNextBound = nextBound
+        var resultingNextBound = startingNextBound
 
         storage.iterate(lowerIndex, upperIndex) { item, index ->
             if (responseIds.size > limit) {
@@ -163,35 +159,42 @@ class Negentropy(
 
     private fun prepareBoundsForDB(storage: IStorage): List<Mode> {
         return prepareBounds(
-            lower = 0,
-            upper = storage.size(),
-            upperBound = StorageUnit(Long.MAX_VALUE),
+            lowerIndex = 0,
+            upperIndex = storage.size(),
+            startingUpperBound = StorageUnit(Long.MAX_VALUE),
             storage = storage
         )
     }
 
-    private fun prepareBounds(lower: Int, upper: Int, upperBound: StorageUnit, storage: IStorage): List<Mode> {
-        val numElems = upper - lower
-        val buckets = 16
+    private fun prepareBounds(
+        lowerIndex: Int,
+        upperIndex: Int,
+        startingUpperBound: StorageUnit,
+        storage: IStorage
+    ): List<Mode> {
+        val numElems = upperIndex - lowerIndex
+        val buckets = BUCKETS_IN_MESSAGE
 
         val result = mutableListOf<Mode>()
 
         if (numElems < buckets * 2) {
-            result.add(Mode.IdList(upperBound, storage.map(lower, upper) { item -> item.id }))
+            result.add(Mode.IdList(startingUpperBound, storage.map(lowerIndex, upperIndex) { item -> item.id }))
         } else {
             val itemsPerBucket = numElems / buckets
             val bucketsWithExtra = numElems % buckets
-            var curr = lower
+            var currIndex = lowerIndex
 
             repeat(buckets) { i ->
                 val bucketSize = itemsPerBucket + if (i < bucketsWithExtra) 1 else 0
-                val ourFingerprint = fingerprint.run(storage, curr, curr + bucketSize)
-                curr += bucketSize
+                val ourFingerprint = fingerprint.run(storage, currIndex, currIndex + bucketSize)
+                currIndex += bucketSize
 
-                val nextBound = if (curr == upper) {
-                    upperBound
+                val nextBound = if (currIndex == upperIndex) {
+                    // this is the final bucket
+                    startingUpperBound
                 } else {
-                    getMinimalBound(storage.getItem(curr - 1), storage.getItem(curr))
+                    // figure out where to break
+                    smallestBound(storage.getItem(currIndex - 1), storage.getItem(currIndex))
                 }
 
                 result.add(Mode.Fingerprint(nextBound, ourFingerprint))
@@ -208,15 +211,13 @@ class Negentropy(
         return ((frameSizeLimit - 200) - alreadyUsed) / ID_SIZE
     }
 
-    private fun exceededFrameSizeLimit(n: Int): Boolean {
-        return frameSizeLimit != 0L && n > frameSizeLimit - 200L
-    }
+    private fun exceededFrameSizeLimit(n: Int) = frameSizeLimit != 0L && n > frameSizeLimit - 200L
 
-    private fun getMinimalBound(prev: StorageUnit, curr: StorageUnit): StorageUnit {
+    private fun smallestBound(prev: StorageUnit, curr: StorageUnit): StorageUnit {
         return if (curr.timestamp != prev.timestamp) {
             StorageUnit(curr.timestamp)
         } else {
-            StorageUnit(curr.timestamp, curr.id.sharedPrefix(prev.id))
+            StorageUnit(curr.timestamp, curr.id.sharedPrefixPlusMyNextChar(prev.id))
         }
     }
 }

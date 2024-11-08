@@ -80,7 +80,7 @@ class Id : Comparable<Id> {
         }
     }
 
-    fun sharedPrefix(other: Id): Id {
+    fun sharedPrefixPlusMyNextChar(other: Id): Id {
         var sharedPrefixBytes = 0
         for (i in 0 until ID_SIZE) {
             if (bytes[i] != other.bytes[i]) break

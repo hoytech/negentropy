@@ -9,22 +9,21 @@ class StorageVector : IStorage {
     override fun insert(timestamp: Long, idHex: String) = insert(timestamp, Id(idHex))
 
     override fun insert(timestamp: Long, id: Id) {
-        check(!sealed) { throw Error("already sealed") }
-        check(id.bytes.size == ID_SIZE) { throw Error("bad id size for added item") }
+        check(!sealed) { "already sealed" }
+        check(id.bytes.size == ID_SIZE) { "bad id size for added item" }
 
         items.add(StorageUnit(timestamp, id))
     }
 
-    @OptIn(ExperimentalStdlibApi::class)
     override fun seal() {
-        check(!sealed) { throw Error("already sealed") }
+        check(!sealed) { "already sealed" }
         sealed = true
 
-        items.sortWith(this::itemCompare)
+        items.sort()
 
         // checks if there are no duplicates
         for (i in 1 until items.size) {
-            check(itemCompare(items[i - 1], items[i]) != 0) { throw Error("duplicate item inserted") }
+            check(items[i - 1].compareTo(items[i]) != 0) { "duplicate item inserted" }
         }
     }
 
@@ -32,13 +31,11 @@ class StorageVector : IStorage {
         sealed = false
     }
 
-    override fun size(): Int {
-        return items.size
-    }
+    override fun size() = items.size
 
     override fun getItem(index: Int): StorageUnit {
         checkSealed()
-        check(index < items.size) { throw Error("out of range") }
+        check(index < items.size) { "out of range" }
         return items[index]
     }
 
@@ -99,35 +96,13 @@ class StorageVector : IStorage {
 
         if (begin == end) return begin
 
-        return binarySearch(items, begin, end) { itemCompare(it, bound) < 0 }
+        val second = items.binarySearch(bound, begin, end)
+
+        // if the item is not found, it returns negative
+        return if (second < 0) -second -1 else second
     }
 
-    fun itemCompare(a: StorageUnit, b: StorageUnit): Int {
-        return if (a.timestamp == b.timestamp) {
-            a.id.compareTo(b.id)
-        } else {
-            a.timestamp.compareTo(b.timestamp)
-        }
-    }
+    private fun checkSealed() = check(sealed) { "not sealed" }
 
-    private fun checkSealed() = check(sealed) { throw Error("not sealed") }
-
-    private fun checkBounds(begin: Int, end: Int) =
-        check(begin <= end && end <= items.size) { throw Error("bad range") }
-
-    private fun binarySearch(arr: List<StorageUnit>, first: Int, last: Int, cmp: (StorageUnit) -> Boolean): Int {
-        var low = first
-        var high = last
-
-        while (low < high) {
-            val mid = low + (high - low) / 2
-            if (cmp(arr[mid])) {
-                low = mid + 1
-            } else {
-                high = mid
-            }
-        }
-
-        return low
-    }
+    private fun checkBounds(begin: Int, end: Int) = check(begin <= end && end <= items.size) { "bad range" }
 }
