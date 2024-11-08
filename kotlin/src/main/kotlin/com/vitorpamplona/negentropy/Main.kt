@@ -1,5 +1,7 @@
 package com.vitorpamplona.negentropy
 
+import com.vitorpamplona.negentropy.storage.IStorage
+import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageVector
 import java.io.PrintStream
 import java.util.*
@@ -30,7 +32,7 @@ fun main() {
     val scanner = Scanner(System.`in`)
 
     var ne: Negentropy? = null
-    val storage = StorageVector()
+    val storage: IStorage = StorageVector()
 
     debug(owner, "create,$frameSizeLimitStr")
 
@@ -45,7 +47,7 @@ fun main() {
             "item" -> {
                 if (items.size != 3) throw Error("too few items")
                 val created = items[1].toLongOrNull() ?: throw Error("Invalid timestamp format")
-                storage.insert(created, items[2].trim())
+                storage.insert(created, Id(items[2].trim()))
             }
 
             "seal" -> {
