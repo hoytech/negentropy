@@ -3,24 +3,6 @@ package com.vitorpamplona.negentropy.message
 import com.vitorpamplona.negentropy.storage.Bound
 import java.io.ByteArrayOutputStream
 
-/**
- * Stores a skip state that can be shared between builders.
- */
-class SkipDelayer(currentSkipState: Bound? = null) {
-    private var delaySkipBound = currentSkipState
-
-    fun skip(nextBound: Bound) {
-        delaySkipBound = nextBound
-    }
-
-    fun addSkip(builder: MessageBuilder) {
-        delaySkipBound?.let {
-            builder.addSkip(Mode.Skip(it))
-            delaySkipBound = null
-        }
-    }
-}
-
 class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDelayer()) {
     private val builder = ByteArrayOutputStream(256)
 
@@ -117,6 +99,24 @@ class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDe
                 is Mode.Fingerprint -> addFingerprint(it)
                 is Mode.IdList -> addIdList(it)
                 is Mode.Skip -> addSkip(it)
+            }
+        }
+    }
+
+    /**
+     * Stores a skip state that can be shared between builders.
+     */
+    class SkipDelayer(currentSkipState: Bound? = null) {
+        private var delaySkipBound = currentSkipState
+
+        fun skip(nextBound: Bound) {
+            delaySkipBound = nextBound
+        }
+
+        fun addSkip(builder: MessageBuilder) {
+            delaySkipBound?.let {
+                builder.addSkip(Mode.Skip(it))
+                delaySkipBound = null
             }
         }
     }

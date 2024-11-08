@@ -36,7 +36,7 @@ class Negentropy(
 
         val output = MessageBuilder()
         output.addProtocolVersion(PROTOCOL_VERSION)
-        output.addBounds(prepareBoundsForDB(storage))
+        output.addBounds(prepareBounds())
         return output.toByteArray()
     }
 
@@ -163,14 +163,10 @@ class Negentropy(
         }
     }
 
-    private fun prepareBoundsForDB(storage: IStorage): List<Mode> {
-        return prepareBounds(0, storage.size(), Bound(Long.MAX_VALUE))
-    }
-
     private fun prepareBounds(
-        lowerIndex: Int,
-        upperIndex: Int,
-        finalUpperBound: Bound
+        lowerIndex: Int = 0,
+        upperIndex: Int = storage.size(),
+        finalUpperBound: Bound = Bound(Long.MAX_VALUE)
     ): List<Mode> {
         val numElems = upperIndex - lowerIndex
 

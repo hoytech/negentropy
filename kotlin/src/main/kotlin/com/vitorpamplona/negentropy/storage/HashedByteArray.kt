@@ -26,10 +26,10 @@ open class HashedByteArray : Comparable<HashedByteArray> {
      * Guarantees that two arrays with the same content get the same hashcode
      */
     private fun computeHashcode(): Int {
-        var h = 1
+        var hash = 1
         for (i in bytes.size - 1 downTo 0)
-            h = 31 * h + bytes[i].toInt()
-        return h
+            hash = 31 * hash + bytes[i].toInt()
+        return hash
     }
 
     override fun hashCode() = hashCode
@@ -55,19 +55,20 @@ open class HashedByteArray : Comparable<HashedByteArray> {
         for (i in bytes.indices) {
             if (i >= other.bytes.size) return 1 // `a` is longer
 
+            // avoids conversion to unsigned byte if the same
             if (bytes[i] == other.bytes[i]) continue
 
-            // avoids conversion to unsigned byte
+            // avoids conversion to unsigned byte if both are negative
             if (bytes[i] < 0 && other.bytes[i] < 0) {
                 if (bytes[i] < other.bytes[i]) return -1
                 if (bytes[i] > other.bytes[i]) return 1
             }
 
-            if (bytes[i] < 0) return 1 // other.bytes[i] is negative
+            if (bytes[i] < 0) return 1 // other.bytes[i] is positive or zero
 
-            if (other.bytes[i] < 0) return -1 // bytes[i] is negative
+            if (other.bytes[i] < 0) return -1 // bytes[i] is positive or zero
 
-            // both are negative
+            // both are positive
             if (bytes[i] < other.bytes[i]) return -1
             if (bytes[i] > other.bytes[i]) return 1
         }
