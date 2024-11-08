@@ -6,22 +6,22 @@ import java.util.*
 
 val DEBUG = false
 
-fun initDebug(owner: Long) {
+fun initDebug(owner: String) {
     if (DEBUG) {
-        System.setErr(PrintStream("err$owner.txt"));
+        System.setErr(PrintStream("$owner.txt"));
     }
 }
 
-fun debug(owner: Long, message: String) {
+fun debug(owner: String, message: String) {
     if (DEBUG) {
-        val time = System.nanoTime()
+        val time = System.currentTimeMillis()
         System.err.println("$time,$owner,$message")
     }
 }
 
 @OptIn(ExperimentalStdlibApi::class)
 fun main() {
-    val owner = System.nanoTime()
+    val owner = "kotlin-side" + System.nanoTime().toString()
 
     initDebug(owner)
 
