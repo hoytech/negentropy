@@ -1,6 +1,5 @@
 package com.vitorpamplona.negentropy
 
-import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.testutils.InstructionParser
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
@@ -15,15 +14,15 @@ class NegentropyMultipleRoundsTest {
 
         val instructions = ip.loadFiles("/multiplerounds-node1.txt", "/multiplerounds-node2.txt")
         val nodes = mutableMapOf<String, InstructionParser.Node>()
-        var expectedCommand: String? = null
+        var producedCommand: String? = null
 
         instructions.forEach {
-            if (expectedCommand != null) {
-                assertEquals(expectedCommand, it.command.source)
-                expectedCommand = null
+            if (producedCommand != null) {
+                assertEquals(it.command.source, producedCommand)
+                producedCommand = null
             }
 
-            expectedCommand = ip.runLine(it, nodes)
+            producedCommand = ip.runLine(it, nodes)
         }
 
         val nodeClient = nodes["559789284344708"]!!
