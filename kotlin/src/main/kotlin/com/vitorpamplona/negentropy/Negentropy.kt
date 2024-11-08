@@ -7,7 +7,6 @@ import com.vitorpamplona.negentropy.message.Mode
 import com.vitorpamplona.negentropy.storage.IStorage
 import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
-import kotlin.time.measureTimedValue
 
 class Negentropy(
     val storage: IStorage,
@@ -67,21 +66,18 @@ class Negentropy(
         }
 
         var lowerIndex = 0
-        var delaySkipBound: StorageUnit? = null
 
         while (consumer.hasItemsToConsume()) {
             val mode = consumer.nextMode()
             var upperIndex = storage.findNextBoundIndex(lowerIndex, storage.size(), mode.nextBound)
 
             when (mode) {
-                is Mode.Skip -> delaySkipBound = mode.nextBound
+                is Mode.Skip -> builder.delaySkip(mode.nextBound)
                 is Mode.Fingerprint -> {
                     if (mode.fingerprint.contentEquals(fingerprint.run(storage, lowerIndex, upperIndex))) {
-                        delaySkipBound = mode.nextBound
+                        builder.delaySkip(mode.nextBound)
                     } else {
                         val lineBuilder = builder.branch()
-
-                        delaySkipBound?.let { lineBuilder.addSkip(it); delaySkipBound = null }
 
                         lineBuilder.addBounds(prepareBounds(lowerIndex, upperIndex, mode.nextBound, storage))
 
@@ -97,12 +93,10 @@ class Negentropy(
 
                 is Mode.IdList -> {
                     if (isInitiator) {
-                        delaySkipBound = mode.nextBound
+                        builder.delaySkip(mode.nextBound)
                         reconcileRangeIntoHavesAndNeeds(mode.ids, lowerIndex, upperIndex, haveIds, needIds)
                     } else {
                         val howManyIdsWillFit = howManyIdsWillFit(builder.length())
-
-                        delaySkipBound?.let { builder.addSkip(it); delaySkipBound = null }
 
                         val ids = listIdsFromRange(lowerIndex, upperIndex, mode.nextBound, howManyIdsWillFit)
 

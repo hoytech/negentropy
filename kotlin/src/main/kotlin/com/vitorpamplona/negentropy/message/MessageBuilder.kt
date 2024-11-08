@@ -4,14 +4,33 @@ import com.vitorpamplona.negentropy.storage.Id
 import com.vitorpamplona.negentropy.storage.StorageUnit
 import java.io.ByteArrayOutputStream
 
-class MessageBuilder(lastTimestamp: Long = 0L) {
+class SkipDelayer {
+    private var delaySkipBound: StorageUnit? = null
+
+    fun skip(nextBound: StorageUnit) {
+        delaySkipBound = nextBound
+    }
+
+    fun addSkip(builder: MessageBuilder) {
+        delaySkipBound?.let {
+            builder.addSkip(it)
+            delaySkipBound = null
+        }
+    }
+}
+
+class MessageBuilder(lastTimestamp: Long = 0L, skipStarter: SkipDelayer = SkipDelayer()) {
     private val builder = ByteArrayOutputStream(256)
     private var lastTimestampOut = lastTimestamp
+    private var skipper = skipStarter
 
-    fun branch() = MessageBuilder(lastTimestampOut)
+    // Branches a new builder while keeping the same timeout and skip status
+    fun branch() = MessageBuilder(lastTimestampOut, skipper)
 
+    // Merges a builder while keeping the same timeout and skip status
     fun merge(builder: MessageBuilder) {
         lastTimestampOut = builder.lastTimestampOut
+        skipper = builder.skipper
         addByteArray(builder.toByteArray())
     }
 
@@ -56,6 +75,7 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
     fun addSkip(mode: Mode.Skip) = addSkip(mode.nextBound)
 
     fun addIdList(nextBound: StorageUnit, ids: List<Id>) {
+        addDelayedSkip()
         addBound(nextBound)
         addNumber(Mode.IdList.CODE)
         addNumber(ids.size)
@@ -69,6 +89,7 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
     fun addFingerprint(fingerprint: ByteArray) = addFingerprint(StorageUnit(Long.MAX_VALUE), fingerprint)
 
     fun addFingerprint(nextBound: StorageUnit, fingerprint: ByteArray) {
+        addDelayedSkip()
         addBound(nextBound)
         addNumber(Mode.Fingerprint.CODE)
         addByteArray(fingerprint)
@@ -84,6 +105,14 @@ class MessageBuilder(lastTimestamp: Long = 0L) {
                 is Mode.Skip -> addSkip(it)
             }
         }
+    }
+
+    fun addDelayedSkip() {
+        skipper.addSkip(this)
+    }
+
+    fun delaySkip(nextBound: StorageUnit) {
+        skipper.skip(nextBound)
     }
 }
 
