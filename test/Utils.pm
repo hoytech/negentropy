@@ -16,6 +16,8 @@ sub harnessTypeToCmd {
         return 'go run go/harness.go';
     } elsif ($harnessType eq 'go-nostr') {
         return "bash -c 'cd go-nostr && go run .'";
+    } elsif ($harnessType eq 'csharp') {
+        return "./csharp/bin/Debug/net8.0/Harness";
     }
 
     die "unknown harness type: $harnessType";
