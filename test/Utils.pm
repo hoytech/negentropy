@@ -18,6 +18,8 @@ sub harnessTypeToCmd {
         return "bash -c 'cd go-nostr && go run .'";
     } elsif ($harnessType eq 'csharp') {
         return "./csharp/bin/Debug/net8.0/Harness";
+    } elsif ($harnessType eq 'kotlin') {
+        return "kotlin -classpath ../negentropy-kmp/negentropy/build/libs/negentropy-jvm-1.0.0.jar com.vitorpamplona.negentropy.MainKt";
     }
 
     die "unknown harness type: $harnessType";

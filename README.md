@@ -132,6 +132,7 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [C bindings](c/README.md) | DarshanBPatel | Experimental | Same as C++ |
 | [Go](https://github.com/nbd-wtf/go-nostr/nip77/negentropy) | fiatjaf | Stable, Nostr-specific | Vector |
 | [C#](https://github.com/bezysoftware/negentropy.net) | bezysoftware | Stable | Vector |
+| [Kotlin](https://github.com/vitorpamplona/negentropy-kmp) | Vitor Pamplona | Stable | Vector |
 
 
 ## Applications
@@ -184,7 +185,7 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 
 * For the golang implementation, checkout the repo in the same directory as the `negentropy` repo, then inside `negentropy/test/` directory running `perl test.pl cpp,go`
 
-
+* For the kotlin implementation, checkout the repo in the same directory as the `negentropy` repo, then inside `negentropy/test/` directory running `perl test.pl cpp,kotlin`
 
 ## Author
 
