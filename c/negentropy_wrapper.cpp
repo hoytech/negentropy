@@ -137,7 +137,7 @@ int reconcile(void* negentropy, buffer* query, result* result){
         //All errors returned are non-recoverable errors.
         //So passing on the error message upwards
         //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
-        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        result->error = (char*)calloc(strlen(e.what()) + 1, sizeof(char));
         strcpy(result->error,e.what());
         return -1;
     }
@@ -240,7 +240,7 @@ int reconcile_with_ids_no_cbk(void* negentropy, buffer*  query, result* result){
 
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
-        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        result->error = (char*)calloc(strlen(e.what()) + 1, sizeof(char));
         strcpy(result->error,e.what());
         return -1;
     }
@@ -375,7 +375,7 @@ int reconcile_subrange(void* negentropy, buffer* query, result* result){
         //All errors returned are non-recoverable errors.
         //So passing on the error message upwards
         //std::cout << "Exception raised in reconcile " << e.what() << std::endl;
-        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        result->error = (char*)calloc(strlen(e.what()) + 1, sizeof(char));
         strcpy(result->error,e.what());
         return -1;
     }
@@ -415,7 +415,7 @@ int reconcile_with_ids_subrange_no_cbk(void* negentropy, buffer*  query, result*
 
     } catch(negentropy::err e){
         std::cout << "caught error "<< e.what() << std::endl;
-        result->error = (char*)calloc(strlen(e.what()), sizeof(char));
+        result->error = (char*)calloc(strlen(e.what()) + 1, sizeof(char));
         strcpy(result->error,e.what());
         return -1;
     }
