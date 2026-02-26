@@ -8,19 +8,19 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip77/negentropy"
-	"github.com/nbd-wtf/go-nostr/nip77/negentropy/storage/vector"
+	"fiatjaf.com/nostr"
+	"fiatjaf.com/nostr/nip77/negentropy"
+	"fiatjaf.com/nostr/nip77/negentropy/storage/vector"
 )
 
 func main() {
 	frameSizeLimit, _ := strconv.Atoi(os.Getenv("FRAMESIZELIMIT"))
 
 	vec := vector.New()
-	neg := negentropy.New(vec, frameSizeLimit)
+	neg := negentropy.New(vec, frameSizeLimit, true, true)
 
-	have := make([]string, 0, 500)
-	need := make([]string, 0, 500)
+	have := make([]nostr.ID, 0, 500)
+	need := make([]nostr.ID, 0, 500)
 
 	wg := sync.WaitGroup{}
 	wg.Add(2)
@@ -56,7 +56,7 @@ func main() {
 			if err != nil {
 				panic(err)
 			}
-			vec.Insert(nostr.Timestamp(created), items[2])
+			vec.Insert(nostr.Timestamp(created), nostr.MustIDFromHex(items[2]))
 
 		case "seal":
 			vec.Seal()
@@ -77,10 +77,10 @@ func main() {
 				wg.Wait()
 
 				for _, id := range have {
-					fmt.Printf("have,%s\n", id)
+					fmt.Printf("have,%s\n", id.Hex())
 				}
 				for _, id := range need {
-					fmt.Printf("need,%s\n", id)
+					fmt.Printf("need,%s\n", id.Hex())
 				}
 
 				fmt.Println("done")

@@ -14,8 +14,8 @@ sub harnessTypeToCmd {
         return '../../rust-negentropy/target/debug/harness';
     } elsif ($harnessType eq 'go') {
         return 'go run go/harness.go';
-    } elsif ($harnessType eq 'go-nostr') {
-        return "bash -c 'cd go-nostr && go run .'";
+    } elsif ($harnessType eq 'nostrlib') {
+        return "bash -c 'cd nostrlib && go run .'";
     } elsif ($harnessType eq 'csharp') {
         return "./csharp/bin/Debug/net8.0/Harness";
     } elsif ($harnessType eq 'kotlin') {
