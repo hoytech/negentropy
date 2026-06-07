@@ -133,6 +133,7 @@ This section lists all the currently-known negentropy implementations. If you kn
 | [Go](https://pkg.go.dev/fiatjaf.com/nostr/nip77/negentropy) | fiatjaf | Stable, Nostr-specific | Vector |
 | [C#](https://github.com/bezysoftware/negentropy.net) | bezysoftware | Stable | Vector |
 | [Kotlin](https://github.com/vitorpamplona/negentropy-kmp) | Vitor Pamplona | Stable | Vector |
+| [Perl](https://metacpan.org/pod/Net::Nostr::Negentropy) | Nicholas B. Hubbard | Stable | Vector |
 
 * Elvio Amparore has created a fork of LMDB called [Anti-Entropy LMDB](https://github.com/amparore/aelmdb) that is designed to optimise the negentropy protocol. By storing aggregate metadata in LMDB branch pages, negentropy fingerprints can be calculated without scanning leaf pages. Benchmarks indicate an efficiency improvement on the order of 4-10x.
 
