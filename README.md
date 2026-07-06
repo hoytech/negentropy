@@ -188,7 +188,7 @@ Finally, a protocol upgrade test is run for each language to ensure that when ru
 
 * For the golang implementation, checkout the repo in the same directory as the `negentropy` repo, then inside `negentropy/test/` directory running `perl test.pl cpp,go`
 
-* For the kotlin implementation, checkout the repo in the same directory as the `negentropy` repo, then inside `negentropy/test/` directory running `perl test.pl cpp,kotlin`
+* For the kotlin implementation, run `make` inside the `negentropy/test/kotlin/` directory to download the published jar from Maven Central, then inside `negentropy/test/` directory running `perl test.pl cpp,kotlin`
 
 ## Author
 
