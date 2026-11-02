@@ -71,6 +71,22 @@ if (@langs >= 2) {
 }
 
 
+## Mirror test special case (issue #20)
+
+{
+    system("perl gen-mirror-case.pl");
+
+    foreach my $lang1 (@langs) {
+        foreach my $lang2 (@langs) {
+            run("SET1=mirror-client.txt SET2=mirror-server.txt FRAMESIZELIMIT1=4096 FRAMESIZELIMIT2=4767 perl fuzz.pl $lang1 $lang2");
+        }
+    }
+
+    unlink('mirror-client.txt');
+    unlink('mirror-server.txt');
+}
+
+
 
 ## Protocol upgrade tests
 
