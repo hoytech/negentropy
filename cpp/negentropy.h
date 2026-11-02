@@ -94,6 +94,7 @@ struct Negentropy {
         Bound prevBound;
         size_t prevIndex = 0;
         bool skip = false;
+        size_t emittedIndex = 0; // items below the last bound written to fullOutput end here
 
         while (query.size()) {
             std::string o;
@@ -180,20 +181,23 @@ struct Negentropy {
 
                     fullOutput += o;
                     o.clear();
+                    emittedIndex = upper;
                 }
             } else {
                 throw negentropy::err("unexpected mode");
             }
 
             if (exceededFrameSizeLimit(fullOutput.size() + o.size())) {
-                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
-                auto remainingFingerprint = storage.fingerprint(upper, storageSize);
+                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range.
+                // The receiver reads that range as starting at the last bound written, so fingerprint from there.
+                auto remainingFingerprint = storage.fingerprint(emittedIndex, storageSize);
 
                 fullOutput += encodeBound(Bound(MAX_U64));
                 fullOutput += encodeVarInt(uint64_t(Mode::Fingerprint));
                 fullOutput += remainingFingerprint.sv();
                 break;
             } else {
+                if (o.size()) emittedIndex = upper;
                 fullOutput += o;
             }
 

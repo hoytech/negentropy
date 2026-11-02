@@ -304,6 +304,7 @@ class Negentropy {
         let prevBound = this._bound(0);
         let prevIndex = 0;
         let skip = false;
+        let emittedIndex = 0; // items below the last bound written to fullOutput end here
 
         while (query.length !== 0) {
             let o = new WrappedBuffer();
@@ -390,20 +391,23 @@ class Negentropy {
 
                     fullOutput.extend(o);
                     o = new WrappedBuffer();
+                    emittedIndex = upper;
                 }
             } else {
                 throw Error("unexpected mode");
             }
 
             if (this.exceededFrameSizeLimit(fullOutput.length + o.length)) {
-                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range
-                let remainingFingerprint = await this.storage.fingerprint(upper, storageSize);
+                // frameSizeLimit exceeded: Stop range processing and return a fingerprint for the remaining range.
+                // The receiver reads that range as starting at the last bound written, so fingerprint from there.
+                let remainingFingerprint = await this.storage.fingerprint(emittedIndex, storageSize);
 
                 fullOutput.extend(this.encodeBound(this._bound(Number.MAX_VALUE)));
                 fullOutput.extend(encodeVarInt(Mode.Fingerprint));
                 fullOutput.extend(remainingFingerprint);
                 break;
             } else {
+                if (o.length) emittedIndex = upper;
                 fullOutput.extend(o);
             }
 
