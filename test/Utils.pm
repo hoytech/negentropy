@@ -19,7 +19,7 @@ sub harnessTypeToCmd {
     } elsif ($harnessType eq 'csharp') {
         return "./csharp/bin/Debug/net8.0/Harness";
     } elsif ($harnessType eq 'kotlin') {
-        return "kotlin -classpath kotlin/kmp-negentropy-jvm-1.2.0.jar com.vitorpamplona.negentropy.MainKt";
+        return "kotlin -classpath kotlin/kmp-negentropy-jvm-1.2.1.jar com.vitorpamplona.negentropy.MainKt";
     }
 
     die "unknown harness type: $harnessType";

@@ -1,4 +1,4 @@
-VERSION = 1.2.0
+VERSION = 1.2.1
 JAR = kmp-negentropy-jvm-$(VERSION).jar
 URL = https://repo1.maven.org/maven2/com/vitorpamplona/negentropy/kmp-negentropy-jvm/v$(VERSION)/kmp-negentropy-jvm-v$(VERSION).jar
 
